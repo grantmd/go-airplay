@@ -1,4 +1,9 @@
 //
+// Handles discovery of airplay devices on the local network. That means
+// that this is basically a multicast DNS and service discovery client,
+// except that we only implement the bare minimum to do airplay devices.
+//
+// Relevant RFCs:
 // http://www.ietf.org/rfc/rfc6762.txt - Multicast DNS
 // http://www.ietf.org/rfc/rfc6763.txt - DNS-Based Service Discovery
 //
