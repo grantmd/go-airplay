@@ -14,6 +14,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"strconv"
 )
 
 // A representation of a full message, including header
@@ -28,8 +29,6 @@ type Message struct {
 	IsRecursionAvailable bool   // True if the server supports recursive queries
 	IsZero               bool   // Reserved, must be false
 	Rcode                int    // Response code of the response, 0 for no errors
-	//AuthenticatedData  bool
-	//CheckingDisabled   bool
 
 	// Message values
 }
@@ -148,7 +147,7 @@ func (m *Message) String() string {
 	// Header fields
 	s := ";; opcode: " + OpcodeToString[m.Opcode]
 	s += ", status: " + RcodeToString[m.Rcode]
-	s += ", id: " + string(m.Id) + "\n"
+	s += ", id: " + strconv.Itoa(int(m.Id)) + "\n"
 
 	s += ";; flags:"
 	if m.IsResponse {
@@ -169,12 +168,6 @@ func (m *Message) String() string {
 	if m.IsZero { // Hmm
 		s += " z"
 	}
-	/*if m.IsAuthenticatedData {
-		s += " ad"
-	}
-	if m.IsCheckingDisabled {
-		s += " cd"
-	}*/
 
 	s += ";"
 
