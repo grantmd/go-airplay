@@ -113,28 +113,16 @@ func parseMessage(buffer []byte) Message {
 	msg.Id = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
 	offset += 2
 
-	msg.IsResponse = (buffer[offset] != 0)
-	offset += 1
-
-	msg.Opcode = int(buffer[offset])
-	offset += 1
-
-	msg.IsAuthoritative = (buffer[offset] != 0)
-	offset += 1
-
-	msg.IsTruncated = (buffer[offset] != 0)
-	offset += 1
-
+	msg.IsResponse = (buffer[offset]&(1<<7) != 0)
+	msg.Opcode = int(buffer[offset]>>3) & 0xF
+	msg.IsAuthoritative = (buffer[offset]&(1<<2) != 0)
+	msg.IsTruncated = (buffer[offset]&(1<<1) != 0)
 	msg.IsRecursionDesired = (buffer[offset] != 0)
 	offset += 1
 
-	msg.IsRecursionAvailable = (buffer[offset] != 0)
-	offset += 1
-
-	msg.IsZero = (buffer[offset] != 0)
-	offset += 1
-
-	msg.Rcode = int(buffer[offset])
+	msg.IsRecursionAvailable = (buffer[offset]&(1<<7) != 0)
+	msg.IsZero = (buffer[offset]&(1<<6) != 0) // TODO: There's other stuff in here!
+	msg.Rcode = int(buffer[offset] & 0xF)
 	offset += 1
 
 	// Now the rest of the message
