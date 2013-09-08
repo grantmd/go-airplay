@@ -6,24 +6,35 @@
 package main
 
 import (
-	"log"
+	"fmt"
 	"net"
 )
 
 func main() {
-	log.Println("Starting up...")
+	fmt.Println("Starting up...")
 	// Listen on the multicast address and port
 	socket, err := net.ListenMulticastUDP("udp", nil, &net.UDPAddr{
 		IP:   net.IPv4(224, 0, 0, 251),
 		Port: 5353,
 	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	// Don't forget to close it!
 	defer socket.Close()
 
-	log.Println("Waiting for messages...")
+	// Put the listener in its own goroutine
+	fmt.Println("Waiting for messages...")
+	go listen(socket)
+
+	// Wait for a keypress to exit
+	fmt.Println("Ctrl+C to exit")
+	var input string
+	fmt.Scanln(&input)
+	fmt.Println("done")
+}
+
+func listen(socket *net.UDPConn) {
 	// Loop forever waiting for messages
 	for {
 		// Buffer for the message
@@ -31,9 +42,9 @@ func main() {
 		// Block and wait for a message on the socket
 		read, addr, err := socket.ReadFromUDP(buff)
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
 		// Print out the source address and the buffer up to "read" bytes
-		log.Printf("%s: %s", addr, buff[:read])
+		fmt.Printf("%s: 0x%x\n", addr, buff[:read])
 	}
 }
