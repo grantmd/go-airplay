@@ -17,21 +17,9 @@ import (
 	"strconv"
 )
 
-// A representation of a full message, including header
-type Message struct {
-	// Header values
-	Id                   uint16 // Can be used to match a response to a question
-	IsResponse           bool   // True if this is a response, false for if this is a question
-	Opcode               int    // What kind of query is this?
-	IsAuthoritative      bool   // If this is a response, true if the responding server is authoritative for the question
-	IsTruncated          bool   // True if the message was truncated
-	IsRecursionDesired   bool   // Copied from the question, true if we want the server to process the query recursively
-	IsRecursionAvailable bool   // True if the server supports recursive queries
-	IsZero               bool   // Reserved, must be false
-	Rcode                int    // Response code of the response, 0 for no errors
-
-	// Message values
-}
+//
+// Main functions for starting up and listening for records start here
+//
 
 func main() {
 	fmt.Println("Starting up...")
@@ -57,6 +45,7 @@ func main() {
 	fmt.Println("done")
 }
 
+// Listen on a socket for multicast records and parse them
 func listen(socket *net.UDPConn) {
 	// Loop forever waiting for messages
 	for {
@@ -69,17 +58,53 @@ func listen(socket *net.UDPConn) {
 		}
 
 		// Parse the buffer (up to "read" bytes) into a message object
-		msg, err := parseMessage(buff[:read])
-		if err != nil {
-			panic(err)
-		}
+		msg := parseMessage(buff[:read])
 
 		// Print out the source address and the message
 		fmt.Printf("\n%s:\n%s\n", addr, msg.String())
 	}
 }
 
-func parseMessage(buffer []byte) (Message, error) {
+//
+// Message parsing functions start here
+//
+
+// A representation of a full message, including header
+type Message struct {
+	// Header values
+	Id                   uint16 // Can be used to match a response to a question
+	IsResponse           bool   // True if this is a response, false for if this is a question
+	Opcode               int    // What kind of query is this?
+	IsAuthoritative      bool   // If this is a response, true if the responding server is authoritative for the question
+	IsTruncated          bool   // True if the message was truncated
+	IsRecursionDesired   bool   // Copied from the question, true if we want the server to process the query recursively
+	IsRecursionAvailable bool   // True if the server supports recursive queries
+	IsZero               bool   // Reserved, must be false
+	Rcode                int    // Response code of the response, 0 for no errors
+
+	// Message values
+	Question []Question       // Holds the resource records in the question section, usually one
+	Answer   []ResourceRecord // Holds the resource records in the answer section
+	Ns       []ResourceRecord // Holds the resource records in the authority section
+	Extra    []ResourceRecord // Holds the resource records in the additional section
+}
+
+type Question struct {
+	Name  string // The name of the domain
+	Type  uint16 // The type of query
+	Class uint16 // The class of the query (like 'IN' for the Internet)
+}
+
+type ResourceRecord struct {
+	Name  string // The name of the domain
+	Type  uint16 // The type of the RDATA field
+	Class uint16 // The class of the RDATA field
+	TTL   uint32 // Time to live of this record, in seconds. Discard when this passes. TODO: Convert this to an explicit expiry timestamp
+	Rdata []byte // The data of the record
+}
+
+// Parse a bytestream into a Message struct
+func parseMessage(buffer []byte) Message {
 	offset := 0 // Point in the buffer that we are reading
 
 	// Header first
@@ -114,8 +139,12 @@ func parseMessage(buffer []byte) (Message, error) {
 
 	// Now the rest of the message
 
-	return msg, nil
+	return msg
 }
+
+//
+// Formatting of messages to strings starts here
+//
 
 // Map of strings for opcodes.
 var OpcodeToString = map[int]string{
