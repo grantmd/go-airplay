@@ -83,10 +83,10 @@ type Message struct {
 	Rcode                int    // Response code of the response, 0 for no errors
 
 	// Message values
-	Question []Question       // Holds the resource records in the question section, usually one
-	Answer   []ResourceRecord // Holds the resource records in the answer section
-	Ns       []ResourceRecord // Holds the resource records in the authority section
-	Extra    []ResourceRecord // Holds the resource records in the additional section
+	Questions []Question       // Holds the resource records in the question section, usually one
+	Answers   []ResourceRecord // Holds the resource records in the answer section
+	Nss       []ResourceRecord // Holds the resource records in the authority section
+	Extras    []ResourceRecord // Holds the resource records in the additional section
 }
 
 type Question struct {
@@ -105,6 +105,7 @@ type ResourceRecord struct {
 
 // Parse a bytestream into a Message struct
 func parseMessage(buffer []byte) Message {
+	length := len(buffer)
 	offset := 0 // Point in the buffer that we are reading
 
 	// Header first
@@ -126,6 +127,58 @@ func parseMessage(buffer []byte) Message {
 	offset += 1
 
 	// Now the rest of the message
+	qdcount := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+	msg.Questions = make([]Question, qdcount)
+	offset += 2
+
+	ancount := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+	msg.Answers = make([]ResourceRecord, ancount)
+	offset += 2
+
+	nscount := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+	msg.Nss = make([]ResourceRecord, nscount)
+	offset += 2
+
+	arcount := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+	msg.Extras = make([]ResourceRecord, arcount)
+	offset += 2
+
+	fmt.Printf("Questions: %d\n", qdcount)
+	for i := 0; i < len(msg.Questions); i++ {
+		name := ""
+		for {
+			labelLength := uint16(buffer[offset])
+			offset += 1
+			if labelLength == 0 {
+				break
+			}
+
+			name += string(buffer[offset:offset+int(labelLength)]) + "."
+			offset += int(labelLength)
+		}
+
+		msg.Questions[i].Name = name
+
+		msg.Questions[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		offset += 2
+
+		msg.Questions[i].Class = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		offset += 2
+	}
+	for i := 0; i < len(msg.Answers); i++ {
+
+	}
+	for i := 0; i < len(msg.Nss); i++ {
+
+	}
+	for i := 0; i < len(msg.Extras); i++ {
+
+	}
+
+	// TODO: Make this an error and return it
+	if length != offset {
+		fmt.Printf("Expected %d, ended up with %d", length, offset)
+	}
 
 	return msg
 }
@@ -149,6 +202,41 @@ var RcodeToString = map[int]string{
 	3: "NXDOMAIN", // Name Error - Domain doesn't exist
 	4: "NOTIMPL",  // Not implemented - The server doesn't support that query
 	5: "REFUSED",  // The server refuses to process this query
+}
+
+// Map of strings for each CLASS wire type.
+var ClassToString = map[uint16]string{
+	1:   "IN",
+	2:   "CS",
+	3:   "CH",
+	4:   "HS",
+	254: "NONE",
+	255: "ANY",
+}
+
+// Map of strings for each RR wire type.
+var TypeToString = map[uint16]string{
+	1:  "A",
+	2:  "NS",
+	3:  "MD",
+	4:  "MF",
+	5:  "CNAME",
+	6:  "SOA",
+	7:  "MB",
+	8:  "MG",
+	9:  "MR",
+	10: "NULL",
+	11: "WKS",
+	12: "PTR",
+	13: "HINFO",
+	14: "MINFO",
+	15: "MX",
+	16: "TXT",
+
+	252: "AXFR",
+	253: "MAILB",
+	254: "MAILA",
+	255: "ANY",
 }
 
 // Convert a Message to a string, with dig-like headers:
@@ -189,7 +277,31 @@ func (m *Message) String() string {
 	s += ";"
 
 	// Message fields
+	s += " "
+	s += "QUERY: " + strconv.Itoa(len(m.Questions)) + ", "
+	s += "ANSWER: " + strconv.Itoa(len(m.Answers)) + ", "
+	s += "AUTHORITY: " + strconv.Itoa(len(m.Nss)) + ", "
+	s += "ADDITIONAL: " + strconv.Itoa(len(m.Extras)) + "\n"
+
+	if len(m.Questions) > 0 {
+		s += "\n;; QUESTION SECTION:\n"
+		for i := 0; i < len(m.Questions); i++ {
+			s += m.Questions[i].String() + "\n"
+		}
+	}
 
 	// All done
+	return s
+}
+
+func (q *Question) String() (s string) {
+	// prefix with ; (as in dig)
+	if len(q.Name) == 0 {
+		s = ";.\t" // root label
+	} else {
+		s = ";" + q.Name + "\t"
+	}
+	s += ClassToString[q.Class] + "\t"
+	s += " " + TypeToString[q.Type]
 	return s
 }
