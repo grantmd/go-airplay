@@ -165,10 +165,13 @@ func parseMessage(buffer []byte) Message {
 		msg.Answers[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
 		offset += 2
 
-		msg.Answers[i].CacheClear = (buffer[offset]&0x80 != 0)
-		msg.Answers[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
+		msg.Answers[i].CacheClear = (buffer[offset]&0x80 == 0x80)
+		if msg.Answers[i].CacheClear {
+			msg.Answers[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
+		} else {
+			msg.Answers[i].Class = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		}
 		offset += 2
-		fmt.Println("Class:", msg.Answers[i].Class)
 
 		msg.Answers[i].TTL = uint32(uint32(buffer[offset])<<24 | uint32(buffer[offset+1])<<16 | uint32(buffer[offset+2])<<8 | uint32(buffer[offset+3]))
 		offset += 4
@@ -188,8 +191,12 @@ func parseMessage(buffer []byte) Message {
 		msg.Nss[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
 		offset += 2
 
-		msg.Nss[i].CacheClear = (buffer[offset]&0x80 != 0)
-		msg.Nss[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
+		msg.Nss[i].CacheClear = (buffer[offset]&0x80 == 0x80)
+		if msg.Nss[i].CacheClear {
+			msg.Nss[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
+		} else {
+			msg.Nss[i].Class = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		}
 		offset += 2
 
 		msg.Nss[i].TTL = uint32(uint32(buffer[offset])<<24 | uint32(buffer[offset+1])<<16 | uint32(buffer[offset+2])<<8 | uint32(buffer[offset+3]))
@@ -210,8 +217,12 @@ func parseMessage(buffer []byte) Message {
 		msg.Extras[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
 		offset += 2
 
-		msg.Extras[i].CacheClear = (buffer[offset]&0x80 != 0)
-		msg.Extras[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
+		msg.Extras[i].CacheClear = (buffer[offset]&0x80 == 0x80)
+		if msg.Extras[i].CacheClear {
+			msg.Extras[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
+		} else {
+			msg.Extras[i].Class = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		}
 		offset += 2
 
 		msg.Extras[i].TTL = uint32(uint32(buffer[offset])<<24 | uint32(buffer[offset+1])<<16 | uint32(buffer[offset+2])<<8 | uint32(buffer[offset+3]))
