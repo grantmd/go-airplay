@@ -61,7 +61,7 @@ func listen(socket *net.UDPConn) {
 		msg := parseMessage(buff[:read])
 
 		// Print out the source address and the message
-		fmt.Printf("\n%s:\n%s\n", addr, msg.String())
+		fmt.Printf("\nBroadcast from %s:\n%s\n", addr, msg.String())
 	}
 }
 
@@ -96,15 +96,17 @@ type Question struct {
 }
 
 type ResourceRecord struct {
-	Name  string // The name of the domain
-	Type  uint16 // The type of the RDATA field
-	Class uint16 // The class of the RDATA field
-	TTL   uint32 // Time to live of this record, in seconds. Discard when this passes. TODO: Convert this to an explicit expiry timestamp
-	Rdata []byte // The data of the record
+	Name       string // The name of the domain
+	Type       uint16 // The type of the RDATA field
+	Class      uint16 // The class of the RDATA field
+	CacheClear bool
+	TTL        uint32 // Time to live of this record, in seconds. Discard when this passes. TODO: Convert this to an explicit expiry timestamp
+	Rdata      []byte // The data of the record
 }
 
 // Parse a bytestream into a Message struct
 func parseMessage(buffer []byte) Message {
+	//fmt.Printf("% #x\n", buffer)
 	length := len(buffer)
 	offset := 0 // Point in the buffer that we are reading
 
@@ -143,10 +145,109 @@ func parseMessage(buffer []byte) Message {
 	msg.Extras = make([]ResourceRecord, arcount)
 	offset += 2
 
-	fmt.Printf("Questions: %d\n", qdcount)
 	for i := 0; i < len(msg.Questions); i++ {
-		name := ""
-		for {
+		name, offset1 := parseDomainName(buffer, offset)
+		offset = offset1
+		msg.Questions[i].Name = name
+
+		msg.Questions[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		offset += 2
+
+		msg.Questions[i].Class = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		offset += 2
+	}
+
+	for i := 0; i < len(msg.Answers); i++ {
+		name, offset1 := parseDomainName(buffer, offset)
+		offset = offset1
+		msg.Answers[i].Name = name
+
+		msg.Answers[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		offset += 2
+
+		msg.Answers[i].CacheClear = (buffer[offset]&0x80 != 0)
+		msg.Answers[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
+		offset += 2
+		fmt.Println("Class:", msg.Answers[i].Class)
+
+		msg.Answers[i].TTL = uint32(uint32(buffer[offset])<<24 | uint32(buffer[offset+1])<<16 | uint32(buffer[offset+2])<<8 | uint32(buffer[offset+3]))
+		offset += 4
+
+		dataLength := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		offset += 2
+
+		msg.Answers[i].Rdata = buffer[offset : offset+int(dataLength)]
+		offset += int(dataLength)
+	}
+
+	for i := 0; i < len(msg.Nss); i++ {
+		name, offset1 := parseDomainName(buffer, offset)
+		offset = offset1
+		msg.Nss[i].Name = name
+
+		msg.Nss[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		offset += 2
+
+		msg.Nss[i].CacheClear = (buffer[offset]&0x80 != 0)
+		msg.Nss[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
+		offset += 2
+
+		msg.Nss[i].TTL = uint32(uint32(buffer[offset])<<24 | uint32(buffer[offset+1])<<16 | uint32(buffer[offset+2])<<8 | uint32(buffer[offset+3]))
+		offset += 4
+
+		dataLength := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		offset += 2
+
+		msg.Nss[i].Rdata = buffer[offset : offset+int(dataLength)]
+		offset += int(dataLength)
+	}
+
+	for i := 0; i < len(msg.Extras); i++ {
+		name, offset1 := parseDomainName(buffer, offset)
+		offset = offset1
+		msg.Extras[i].Name = name
+
+		msg.Extras[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		offset += 2
+
+		msg.Extras[i].CacheClear = (buffer[offset]&0x80 != 0)
+		msg.Extras[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
+		offset += 2
+
+		msg.Extras[i].TTL = uint32(uint32(buffer[offset])<<24 | uint32(buffer[offset+1])<<16 | uint32(buffer[offset+2])<<8 | uint32(buffer[offset+3]))
+		offset += 4
+
+		dataLength := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
+		offset += 2
+
+		msg.Extras[i].Rdata = buffer[offset : offset+int(dataLength)]
+		offset += int(dataLength)
+	}
+
+	// TODO: Make this an error and return it
+	if length != offset {
+		fmt.Printf("Expected %d, ended up with %d", length, offset)
+	}
+
+	return msg
+}
+
+// Parse a domain name out of the message buffer. Requires access to the full message buffer in case it encounters a pointer
+// to previously in the message. Takes an offset for where to start reading in the buffer.
+// Returns string domain name and new offset
+func parseDomainName(buffer []byte, offset int) (string, int) {
+	name := ""
+	for {
+		// Pointer to somewhere else in the message?
+		if buffer[offset]&0xC0 == 0xC0 {
+			ptr := int(buffer[offset]^0xC0)<<8 | int(buffer[offset+1])
+			ptrName, _ := parseDomainName(buffer, ptr)
+			name += ptrName
+			offset += 2
+			break
+
+		} else {
+			// Nope, raw domain name
 			labelLength := uint16(buffer[offset])
 			offset += 1
 			if labelLength == 0 {
@@ -156,31 +257,9 @@ func parseMessage(buffer []byte) Message {
 			name += string(buffer[offset:offset+int(labelLength)]) + "."
 			offset += int(labelLength)
 		}
-
-		msg.Questions[i].Name = name
-
-		msg.Questions[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
-		offset += 2
-
-		msg.Questions[i].Class = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
-		offset += 2
-	}
-	for i := 0; i < len(msg.Answers); i++ {
-
-	}
-	for i := 0; i < len(msg.Nss); i++ {
-
-	}
-	for i := 0; i < len(msg.Extras); i++ {
-
 	}
 
-	// TODO: Make this an error and return it
-	if length != offset {
-		fmt.Printf("Expected %d, ended up with %d", length, offset)
-	}
-
-	return msg
+	return name, offset
 }
 
 //
@@ -290,6 +369,27 @@ func (m *Message) String() string {
 		}
 	}
 
+	if len(m.Answers) > 0 {
+		s += "\n;; ANSWER SECTION:\n"
+		for i := 0; i < len(m.Answers); i++ {
+			s += m.Answers[i].String() + "\n"
+		}
+	}
+
+	if len(m.Nss) > 0 {
+		s += "\n;; AUTHORITY SECTION:\n"
+		for i := 0; i < len(m.Nss); i++ {
+			s += m.Nss[i].String() + "\n"
+		}
+	}
+
+	if len(m.Extras) > 0 {
+		s += "\n;; ADDITIONAL SECTION:\n"
+		for i := 0; i < len(m.Extras); i++ {
+			s += m.Extras[i].String() + "\n"
+		}
+	}
+
 	// All done
 	return s
 }
@@ -303,5 +403,18 @@ func (q *Question) String() (s string) {
 	}
 	s += ClassToString[q.Class] + "\t"
 	s += " " + TypeToString[q.Type]
+	return s
+}
+
+func (rr *ResourceRecord) String() string {
+	var s string
+	if len(rr.Name) == 0 {
+		s += ".\t"
+	} else {
+		s += rr.Name + "\t"
+	}
+	s += strconv.FormatInt(int64(rr.TTL), 10) + "\t"
+	s += ClassToString[rr.Class] + "\t"
+	s += " " + TypeToString[rr.Type]
 	return s
 }
