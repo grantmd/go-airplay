@@ -21,7 +21,7 @@ import (
 //
 
 // A representation of a full message, including header
-type Message struct {
+type DNSMessage struct {
 	// Header values
 	Id                   uint16 // Can be used to match a response to a question
 	IsResponse           bool   // True if this is a response, false for if this is a question
@@ -55,8 +55,8 @@ type ResourceRecord struct {
 	Rdata      []byte // The data of the record
 }
 
-// Parse a bytestream into a Message struct
-func (msg *Message) Parse(buffer []byte) {
+// Parse a bytestream into a DNSMessage struct
+func (msg *DNSMessage) Parse(buffer []byte) {
 	//fmt.Printf("% #x\n", buffer)
 	length := len(buffer)
 	offset := 0 // Point in the buffer that we are reading
@@ -281,7 +281,7 @@ var TypeToString = map[uint16]string{
 //;; opcode: QUERY, status: NOERROR, id: 48404
 //
 //;; flags: qr aa rd ra;
-func (m *Message) String() string {
+func (m *DNSMessage) String() string {
 	if m == nil {
 		return "<nil> Message"
 	}

@@ -45,7 +45,7 @@ func main() {
 
 // Listen on a socket for multicast records and parse them
 func listen(socket *net.UDPConn) {
-	var msg Message
+	var msg DNSMessage
 	// Loop forever waiting for messages
 	for {
 		// Buffer for the message
