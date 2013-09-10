@@ -51,8 +51,12 @@ type ResourceRecord struct {
 	Type       uint16 // The type of the RDATA field
 	Class      uint16 // The class of the RDATA field
 	CacheClear bool
-	TTL        uint32 // Time to live of this record, in seconds. Discard when this passes. TODO: Convert this to an explicit expiry timestamp
-	Rdata      []byte // The data of the record
+	TTL        uint32      // Time to live of this record, in seconds. Discard when this passes. TODO: Convert this to an explicit expiry timestamp
+	Rdata      interface{} // The data of the record
+}
+
+type PTRRecord struct {
+	Name string // The name of the domain
 }
 
 // Parse a bytestream into a DNSMessage struct
@@ -128,7 +132,14 @@ func (msg *DNSMessage) Parse(buffer []byte) {
 		dataLength := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
 		offset += 2
 
-		msg.Answers[i].Rdata = buffer[offset : offset+int(dataLength)]
+		switch msg.Answers[i].Type {
+		case 12: // PTR
+			var record PTRRecord
+			ptrName, _ := parseDomainName(buffer, offset)
+			record.Name = ptrName
+			msg.Answers[i].Rdata = record
+			break
+		}
 		offset += int(dataLength)
 	}
 
@@ -154,7 +165,14 @@ func (msg *DNSMessage) Parse(buffer []byte) {
 		dataLength := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
 		offset += 2
 
-		msg.Nss[i].Rdata = buffer[offset : offset+int(dataLength)]
+		switch msg.Nss[i].Type {
+		case 12: // PTR
+			var record PTRRecord
+			ptrName, _ := parseDomainName(buffer, offset)
+			record.Name = ptrName
+			msg.Nss[i].Rdata = record
+			break
+		}
 		offset += int(dataLength)
 	}
 
@@ -180,7 +198,14 @@ func (msg *DNSMessage) Parse(buffer []byte) {
 		dataLength := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
 		offset += 2
 
-		msg.Extras[i].Rdata = buffer[offset : offset+int(dataLength)]
+		switch msg.Extras[i].Type {
+		case 12: // PTR
+			var record PTRRecord
+			ptrName, _ := parseDomainName(buffer, offset)
+			record.Name = ptrName
+			msg.Extras[i].Rdata = record
+			break
+		}
 		offset += int(dataLength)
 	}
 
@@ -374,5 +399,10 @@ func (rr *ResourceRecord) String() string {
 	s += strconv.FormatInt(int64(rr.TTL), 10) + "\t"
 	s += ClassToString[rr.Class] + "\t"
 	s += " " + TypeToString[rr.Type]
+	switch rr.Type {
+	case 12: //PTR
+		s += "\t" + rr.Rdata.(PTRRecord).Name
+		break
+	}
 	return s
 }
