@@ -12,6 +12,7 @@
 package main
 
 import (
+	//"encoding/hex"
 	"fmt"
 	"strconv"
 )
@@ -59,9 +60,13 @@ type PTRRecord struct {
 	Name string // The name of the domain
 }
 
+type TXTRecord struct {
+	CStrings []string
+}
+
 // Parse a bytestream into a DNSMessage struct
 func (msg *DNSMessage) Parse(buffer []byte) (err error) {
-	//fmt.Printf("% #x\n", buffer)
+	//fmt.Println(hex.EncodeToString(buffer))
 	length := len(buffer)
 	offset := 0 // Point in the buffer that we are reading
 
@@ -99,8 +104,7 @@ func (msg *DNSMessage) Parse(buffer []byte) (err error) {
 	offset += 2
 
 	for i := 0; i < len(msg.Questions); i++ {
-		name, offset1 := parseDomainName(buffer, offset)
-		offset = offset1
+		name, offset := parseDomainName(buffer, offset)
 		msg.Questions[i].Name = name
 
 		msg.Questions[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
@@ -159,6 +163,18 @@ func parseDomainName(buffer []byte, offset int) (name string, new_offset int) {
 	return name, new_offset
 }
 
+func parseCharacterString(buffer []byte, offset int) (cs string, new_offset int) {
+	new_offset = offset
+
+	labelLength := uint16(buffer[new_offset])
+	new_offset += 1
+
+	cs = string(buffer[new_offset : new_offset+int(labelLength)])
+	new_offset += int(labelLength)
+
+	return cs, new_offset
+}
+
 // Parse a bytestream into a ResourceRecord object
 func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err error) {
 	new_offset = offset
@@ -181,7 +197,7 @@ func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err 
 	rr.TTL = uint32(uint32(buffer[new_offset])<<24 | uint32(buffer[new_offset+1])<<16 | uint32(buffer[new_offset+2])<<8 | uint32(buffer[new_offset+3]))
 	new_offset += 4
 
-	dataLength := uint16(buffer[new_offset])<<8 | uint16(buffer[new_offset+1])
+	dataLength := int(uint16(buffer[new_offset])<<8 | uint16(buffer[new_offset+1]))
 	new_offset += 2
 
 	switch rr.Type {
@@ -189,6 +205,20 @@ func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err 
 		var record PTRRecord
 		ptrName, _ := parseDomainName(buffer, new_offset)
 		record.Name = ptrName
+		rr.Rdata = record
+		break
+
+	case 16: // TXT
+		var record TXTRecord
+		consumed := 0
+
+		for consumed < dataLength {
+			cs, new_offset1 := parseCharacterString(buffer, new_offset)
+			fmt.Println(cs)
+			consumed += new_offset1 - new_offset
+			new_offset = new_offset1
+		}
+
 		rr.Rdata = record
 		break
 	}
