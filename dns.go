@@ -336,8 +336,19 @@ func (q *Question) String() (s string) {
 	} else {
 		s = ";" + q.Name + "\t"
 	}
-	s += ClassToString[q.Class] + "\t"
-	s += " " + TypeToString[q.Type]
+
+	c, ok := ClassToString[q.Class]
+	if ok == false {
+		c = "UNKNOWN: " + string(q.Class)
+	}
+	s += c + "\t"
+
+	t, ok := TypeToString[q.Type]
+	if ok == false {
+		t = "UNKNOWN: " + string(q.Type)
+	}
+
+	s += " " + t
 	return s
 }
 
@@ -349,8 +360,20 @@ func (rr *ResourceRecord) String() string {
 		s += rr.Name + "\t"
 	}
 	s += strconv.FormatInt(int64(rr.TTL), 10) + "\t"
-	s += ClassToString[rr.Class] + "\t"
-	s += " " + TypeToString[rr.Type]
+
+	c, ok := ClassToString[rr.Class]
+	if ok == false {
+		c = "UNKNOWN: " + string(rr.Class)
+	}
+	s += c + "\t"
+
+	t, ok := TypeToString[rr.Type]
+	if ok == false {
+		t = "UNKNOWN: " + string(rr.Type)
+	}
+
+	s += " " + t
+
 	switch rr.Type {
 	case 12: //PTR
 		s += "\t" + rr.Rdata.(PTRRecord).Name
