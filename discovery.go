@@ -57,7 +57,10 @@ func listen(socket *net.UDPConn) {
 		}
 
 		// Parse the buffer (up to "read" bytes) into a message object
-		msg.Parse(buff[:read])
+		err = msg.Parse(buff[:read])
+		if err != nil {
+			panic(err)
+		}
 
 		// Print out the source address and the message
 		fmt.Printf("\nBroadcast from %s:\n%s\n", addr, msg.String())

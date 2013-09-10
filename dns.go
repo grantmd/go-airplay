@@ -60,7 +60,7 @@ type PTRRecord struct {
 }
 
 // Parse a bytestream into a DNSMessage struct
-func (msg *DNSMessage) Parse(buffer []byte) {
+func (msg *DNSMessage) Parse(buffer []byte) (err error) {
 	//fmt.Printf("% #x\n", buffer)
 	length := len(buffer)
 	offset := 0 // Point in the buffer that we are reading
@@ -111,138 +111,90 @@ func (msg *DNSMessage) Parse(buffer []byte) {
 	}
 
 	for i := 0; i < len(msg.Answers); i++ {
-		name, offset1 := parseDomainName(buffer, offset)
-		offset = offset1
-		msg.Answers[i].Name = name
-
-		msg.Answers[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
-		offset += 2
-
-		msg.Answers[i].CacheClear = (buffer[offset]&0x80 == 0x80)
-		if msg.Answers[i].CacheClear {
-			msg.Answers[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
-		} else {
-			msg.Answers[i].Class = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
-		}
-		offset += 2
-
-		msg.Answers[i].TTL = uint32(uint32(buffer[offset])<<24 | uint32(buffer[offset+1])<<16 | uint32(buffer[offset+2])<<8 | uint32(buffer[offset+3]))
-		offset += 4
-
-		dataLength := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
-		offset += 2
-
-		switch msg.Answers[i].Type {
-		case 12: // PTR
-			var record PTRRecord
-			ptrName, _ := parseDomainName(buffer, offset)
-			record.Name = ptrName
-			msg.Answers[i].Rdata = record
-			break
-		}
-		offset += int(dataLength)
+		offset, _ = msg.Answers[i].Parse(buffer, offset)
 	}
 
 	for i := 0; i < len(msg.Nss); i++ {
-		name, offset1 := parseDomainName(buffer, offset)
-		offset = offset1
-		msg.Nss[i].Name = name
-
-		msg.Nss[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
-		offset += 2
-
-		msg.Nss[i].CacheClear = (buffer[offset]&0x80 == 0x80)
-		if msg.Nss[i].CacheClear {
-			msg.Nss[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
-		} else {
-			msg.Nss[i].Class = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
-		}
-		offset += 2
-
-		msg.Nss[i].TTL = uint32(uint32(buffer[offset])<<24 | uint32(buffer[offset+1])<<16 | uint32(buffer[offset+2])<<8 | uint32(buffer[offset+3]))
-		offset += 4
-
-		dataLength := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
-		offset += 2
-
-		switch msg.Nss[i].Type {
-		case 12: // PTR
-			var record PTRRecord
-			ptrName, _ := parseDomainName(buffer, offset)
-			record.Name = ptrName
-			msg.Nss[i].Rdata = record
-			break
-		}
-		offset += int(dataLength)
+		offset, _ = msg.Nss[i].Parse(buffer, offset)
 	}
 
 	for i := 0; i < len(msg.Extras); i++ {
-		name, offset1 := parseDomainName(buffer, offset)
-		offset = offset1
-		msg.Extras[i].Name = name
-
-		msg.Extras[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
-		offset += 2
-
-		msg.Extras[i].CacheClear = (buffer[offset]&0x80 == 0x80)
-		if msg.Extras[i].CacheClear {
-			msg.Extras[i].Class = uint16(buffer[offset]^0x80)<<8 | uint16(buffer[offset+1])
-		} else {
-			msg.Extras[i].Class = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
-		}
-		offset += 2
-
-		msg.Extras[i].TTL = uint32(uint32(buffer[offset])<<24 | uint32(buffer[offset+1])<<16 | uint32(buffer[offset+2])<<8 | uint32(buffer[offset+3]))
-		offset += 4
-
-		dataLength := uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
-		offset += 2
-
-		switch msg.Extras[i].Type {
-		case 12: // PTR
-			var record PTRRecord
-			ptrName, _ := parseDomainName(buffer, offset)
-			record.Name = ptrName
-			msg.Extras[i].Rdata = record
-			break
-		}
-		offset += int(dataLength)
+		offset, _ = msg.Extras[i].Parse(buffer, offset)
 	}
 
-	// TODO: Make this an error and return it
 	if length != offset {
-		fmt.Printf("Expected %d, ended up with %d", length, offset)
+		return fmt.Errorf("Expected %d, ended up with %d", length, offset)
 	}
+
+	return nil
 }
 
 // Parse a domain name out of the message buffer. Requires access to the full message buffer in case it encounters a pointer
 // to previously in the message. Takes an offset for where to start reading in the buffer.
 // Returns string domain name and new offset
-func parseDomainName(buffer []byte, offset int) (string, int) {
-	name := ""
+func parseDomainName(buffer []byte, offset int) (name string, new_offset int) {
+	new_offset = offset
 	for {
 		// Pointer to somewhere else in the message?
-		if buffer[offset]&0xC0 == 0xC0 {
-			ptr := int(buffer[offset]^0xC0)<<8 | int(buffer[offset+1])
+		if buffer[new_offset]&0xC0 == 0xC0 {
+			ptr := int(buffer[new_offset]^0xC0)<<8 | int(buffer[new_offset+1])
 			ptrName, _ := parseDomainName(buffer, ptr)
 			name += ptrName
-			offset += 2
+			new_offset += 2
 			break
 
 		} else {
 			// Nope, raw domain name
-			labelLength := uint16(buffer[offset])
-			offset += 1
+			labelLength := uint16(buffer[new_offset])
+			new_offset += 1
 			if labelLength == 0 {
 				break
 			}
 
-			name += string(buffer[offset:offset+int(labelLength)]) + "."
-			offset += int(labelLength)
+			name += string(buffer[new_offset:new_offset+int(labelLength)]) + "."
+			new_offset += int(labelLength)
 		}
 	}
 
-	return name, offset
+	return name, new_offset
+}
+
+// Parse a bytestream into a ResourceRecord object
+func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err error) {
+	new_offset = offset
+
+	name, offset1 := parseDomainName(buffer, new_offset)
+	new_offset = offset1
+	rr.Name = name
+
+	rr.Type = uint16(buffer[new_offset])<<8 | uint16(buffer[new_offset+1])
+	new_offset += 2
+
+	rr.CacheClear = (buffer[new_offset]&0x80 == 0x80)
+	if rr.CacheClear {
+		rr.Class = uint16(buffer[new_offset]^0x80)<<8 | uint16(buffer[new_offset+1])
+	} else {
+		rr.Class = uint16(buffer[new_offset])<<8 | uint16(buffer[new_offset+1])
+	}
+	new_offset += 2
+
+	rr.TTL = uint32(uint32(buffer[new_offset])<<24 | uint32(buffer[new_offset+1])<<16 | uint32(buffer[new_offset+2])<<8 | uint32(buffer[new_offset+3]))
+	new_offset += 4
+
+	dataLength := uint16(buffer[new_offset])<<8 | uint16(buffer[new_offset+1])
+	new_offset += 2
+
+	switch rr.Type {
+	case 12: // PTR
+		var record PTRRecord
+		ptrName, _ := parseDomainName(buffer, new_offset)
+		record.Name = ptrName
+		rr.Rdata = record
+		break
+	}
+	new_offset += int(dataLength)
+
+	return new_offset, nil
 }
 
 //
