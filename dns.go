@@ -53,7 +53,7 @@ type ResourceRecord struct {
 	Class      uint16 // The class of the RDATA field
 	CacheClear bool
 	TTL        uint32      // Time to live of this record, in seconds. Discard when this passes. TODO: Convert this to an explicit expiry timestamp
-	Rdata      interface{} // The data of the record
+	Rdata      interface{} // The data of the record, cast to one of the *Record structs below
 }
 
 type PTRRecord struct {
