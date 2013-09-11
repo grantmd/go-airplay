@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/hex"
+	"fmt"
 	"testing"
 )
 
@@ -100,4 +101,20 @@ func TestPTR1(t *testing.T) {
 			t.Errorf("Unexpected resource record PTR domain name: %s", rr.Rdata.(PTRRecord).Name)
 		}
 	}
+}
+
+func TestANY1(t *testing.T) {
+	bytes, err := hex.DecodeString("0000000000030000000300002a30633a37343a63323a64353a32343a323440666538303a3a6537343a633266663a666564353a323432340d5f6170706c652d6d6f62646576045f746370056c6f63616c0000ff0001174d6f62696c652d436f6d707574696e672d446576696365c04a00ff0001c05500ff0001c00c0021000100000078000800000000f27ec055c055001c0001000000780010fe800000000000000e74c2fffed52424c055000100010000007800040a000110")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	////////
+	var msg DNSMessage
+	err = msg.Parse(bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Println(msg.String())
 }

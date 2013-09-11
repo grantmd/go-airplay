@@ -7,6 +7,8 @@
 //
 // Relevant RFCs:
 // http://www.ietf.org/rfc/rfc1035.txt - DNS
+// http://www.ietf.org/rfc/rfc2782.txt - DNS SRV RR
+// http://www.ietf.org/rfc/rfc3596.txt - DNS Extensions to Support IP Version 6
 //
 
 package main
@@ -14,6 +16,7 @@ package main
 import (
 	//"encoding/hex"
 	"fmt"
+	"net"
 	"strconv"
 )
 
@@ -56,12 +59,27 @@ type ResourceRecord struct {
 	Rdata      interface{} // The data of the record, cast to one of the *Record structs below
 }
 
+type ARecord struct {
+	Address net.IP // A 32 bit Internet address
+}
+
 type PTRRecord struct {
 	Name string // The name of the domain
 }
 
 type TXTRecord struct {
 	CStrings []string
+}
+
+type AAAARecord struct {
+	Address net.IP // An IPv6 address
+}
+
+type SRVRecord struct {
+	Priority uint16 // Lower values should be tried first
+	Weight   uint16 // Tie-breaker for values of the same priority. Higher values should be tried first
+	Port     uint16 // Port of the target
+	Target   string // The domain name of the target
 }
 
 // Parse a bytestream into a DNSMessage struct
@@ -104,7 +122,8 @@ func (msg *DNSMessage) Parse(buffer []byte) (err error) {
 	offset += 2
 
 	for i := 0; i < len(msg.Questions); i++ {
-		name, offset := parseDomainName(buffer, offset)
+		name, new_offset := parseDomainName(buffer, offset)
+		offset = new_offset
 		msg.Questions[i].Name = name
 
 		msg.Questions[i].Type = uint16(buffer[offset])<<8 | uint16(buffer[offset+1])
@@ -179,8 +198,8 @@ func parseCharacterString(buffer []byte, offset int) (cs string, new_offset int)
 func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err error) {
 	new_offset = offset
 
-	name, offset1 := parseDomainName(buffer, new_offset)
-	new_offset = offset1
+	name, new_offset2 := parseDomainName(buffer, new_offset)
+	new_offset = new_offset2
 	rr.Name = name
 
 	rr.Type = uint16(buffer[new_offset])<<8 | uint16(buffer[new_offset+1])
@@ -201,6 +220,12 @@ func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err 
 	new_offset += 2
 
 	switch rr.Type {
+	case 1: // A
+		var record ARecord
+		record.Address = net.IPv4(buffer[new_offset], buffer[new_offset+1], buffer[new_offset+2], buffer[new_offset+3])
+		rr.Rdata = record
+		break
+
 	case 12: // PTR
 		var record PTRRecord
 		ptrName, _ := parseDomainName(buffer, new_offset)
@@ -218,6 +243,27 @@ func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err 
 			consumed += new_offset1 - new_offset
 			new_offset = new_offset1
 		}
+
+		rr.Rdata = record
+		break
+
+	case 28: // AAAA
+		var record AAAARecord
+		record.Address = net.IP{buffer[new_offset], buffer[new_offset+1], buffer[new_offset+2], buffer[new_offset+3],
+			buffer[new_offset+4], buffer[new_offset+5], buffer[new_offset+6], buffer[new_offset+7],
+			buffer[new_offset+8], buffer[new_offset+9], buffer[new_offset+10], buffer[new_offset+11],
+			buffer[new_offset+12], buffer[new_offset+13], buffer[new_offset+14], buffer[new_offset+15]}
+		rr.Rdata = record
+		break
+
+	case 33: // SRV
+		var record SRVRecord
+		record.Priority = uint16(buffer[new_offset])<<8 | uint16(buffer[new_offset+1])
+		record.Weight = uint16(buffer[new_offset+2])<<8 | uint16(buffer[new_offset+3])
+		record.Port = uint16(buffer[new_offset+4])<<8 | uint16(buffer[new_offset+5])
+
+		targetName, _ := parseDomainName(buffer, new_offset+6)
+		record.Target = targetName
 
 		rr.Rdata = record
 		break
@@ -276,6 +322,9 @@ var TypeToString = map[uint16]string{
 	14: "MINFO",
 	15: "MX",
 	16: "TXT",
+
+	28: "AAAA",
+	33: "SRV",
 
 	252: "AXFR",
 	253: "MAILB",
@@ -369,13 +418,13 @@ func (q *Question) String() (s string) {
 
 	c, ok := ClassToString[q.Class]
 	if ok == false {
-		c = "UNKNOWN: " + string(q.Class)
+		c = "UNKNOWN: " + strconv.Itoa(int(q.Class))
 	}
 	s += c + "\t"
 
 	t, ok := TypeToString[q.Type]
 	if ok == false {
-		t = "UNKNOWN: " + string(q.Type)
+		t = "UNKNOWN: " + strconv.Itoa(int(q.Type))
 	}
 
 	s += " " + t
@@ -393,20 +442,32 @@ func (rr *ResourceRecord) String() string {
 
 	c, ok := ClassToString[rr.Class]
 	if ok == false {
-		c = "UNKNOWN: " + string(rr.Class)
+		c = "UNKNOWN: " + strconv.Itoa(int(rr.Class))
 	}
 	s += c + "\t"
 
 	t, ok := TypeToString[rr.Type]
 	if ok == false {
-		t = "UNKNOWN: " + string(rr.Type)
+		t = "UNKNOWN: " + strconv.Itoa(int(rr.Type))
 	}
 
 	s += " " + t
 
 	switch rr.Type {
-	case 12: //PTR
+	case 1: // A
+		s += "\t" + rr.Rdata.(ARecord).Address.String()
+		break
+	case 12: // PTR
 		s += "\t" + rr.Rdata.(PTRRecord).Name
+		break
+	case 28: // AAAA
+		s += "\t" + rr.Rdata.(AAAARecord).Address.String()
+		break
+	case 33: // SRV
+		record := rr.Rdata.(SRVRecord)
+		s += "\t" + strconv.Itoa(int(record.Priority)) + " " +
+			strconv.Itoa(int(record.Weight)) + " " +
+			strconv.Itoa(int(record.Port)) + " " + record.Target
 		break
 	}
 	return s
