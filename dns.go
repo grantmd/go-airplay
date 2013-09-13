@@ -271,6 +271,7 @@ func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err 
 		rr.Rdata = record
 		new_offset += int(dataLength)
 		break
+
 	default:
 		new_offset += int(dataLength)
 		break
@@ -463,9 +464,11 @@ func (rr *ResourceRecord) String() string {
 	case 1: // A
 		s += "\t" + rr.Rdata.(ARecord).Address.String()
 		break
+
 	case 12: // PTR
 		s += "\t" + rr.Rdata.(PTRRecord).Name
 		break
+
 	case 16: // TXT
 		s += "\t"
 		for i, s1 := range rr.Rdata.(TXTRecord).CStrings {
@@ -476,9 +479,11 @@ func (rr *ResourceRecord) String() string {
 			}
 		}
 		break
+
 	case 28: // AAAA
 		s += "\t" + rr.Rdata.(AAAARecord).Address.String()
 		break
+
 	case 33: // SRV
 		record := rr.Rdata.(SRVRecord)
 		s += "\t" + strconv.Itoa(int(record.Priority)) + " " +
