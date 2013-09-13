@@ -224,6 +224,7 @@ func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err 
 		var record ARecord
 		record.Address = net.IPv4(buffer[new_offset], buffer[new_offset+1], buffer[new_offset+2], buffer[new_offset+3])
 		rr.Rdata = record
+		new_offset += int(dataLength)
 		break
 
 	case 12: // PTR
@@ -231,6 +232,7 @@ func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err 
 		ptrName, _ := parseDomainName(buffer, new_offset)
 		record.Name = ptrName
 		rr.Rdata = record
+		new_offset += int(dataLength)
 		break
 
 	case 16: // TXT
@@ -239,7 +241,7 @@ func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err 
 
 		for consumed < dataLength {
 			cs, new_offset1 := parseCharacterString(buffer, new_offset)
-			fmt.Println(cs)
+			record.CStrings = append(record.CStrings, cs)
 			consumed += new_offset1 - new_offset
 			new_offset = new_offset1
 		}
@@ -254,6 +256,7 @@ func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err 
 			buffer[new_offset+8], buffer[new_offset+9], buffer[new_offset+10], buffer[new_offset+11],
 			buffer[new_offset+12], buffer[new_offset+13], buffer[new_offset+14], buffer[new_offset+15]}
 		rr.Rdata = record
+		new_offset += int(dataLength)
 		break
 
 	case 33: // SRV
@@ -266,9 +269,12 @@ func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err 
 		record.Target = targetName
 
 		rr.Rdata = record
+		new_offset += int(dataLength)
+		break
+	default:
+		new_offset += int(dataLength)
 		break
 	}
-	new_offset += int(dataLength)
 
 	return new_offset, nil
 }
@@ -459,6 +465,16 @@ func (rr *ResourceRecord) String() string {
 		break
 	case 12: // PTR
 		s += "\t" + rr.Rdata.(PTRRecord).Name
+		break
+	case 16: // TXT
+		s += "\t"
+		for i, s1 := range rr.Rdata.(TXTRecord).CStrings {
+			if i > 0 {
+				s += " " + strconv.QuoteToASCII(s1)
+			} else {
+				s += strconv.QuoteToASCII(s1)
+			}
+		}
 		break
 	case 28: // AAAA
 		s += "\t" + rr.Rdata.(AAAARecord).Address.String()
