@@ -39,8 +39,9 @@ func main() {
 	// Wait for a keypress to exit
 	fmt.Println("Ctrl+C to exit")
 	var input string
-	fmt.Scanln(&input)
-	fmt.Println("done")
+	for {
+		fmt.Scanln(&input)
+	}
 }
 
 // Listen on a socket for multicast records and parse them
