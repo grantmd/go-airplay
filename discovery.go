@@ -71,7 +71,7 @@ func main() {
 	defer socketOut.Close()
 
 	// Write the payload
-	_, err = socketOut.Write(buffer)
+	_, err = socketIn.Write(buffer)
 	if err != nil {
 		panic(err)
 	}
