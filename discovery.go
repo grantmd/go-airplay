@@ -22,7 +22,7 @@ import (
 func main() {
 	fmt.Println("Starting up...")
 	// Listen on the multicast address and port
-	socket, err := net.ListenMulticastUDP("udp", nil, &net.UDPAddr{
+	socketIn, err := net.ListenMulticastUDP("udp", nil, &net.UDPAddr{
 		IP:   net.IPv4(224, 0, 0, 251),
 		Port: 5353,
 	})
@@ -30,11 +30,41 @@ func main() {
 		panic(err)
 	}
 	// Don't forget to close it!
-	defer socket.Close()
+	defer socketIn.Close()
 
 	// Put the listener in its own goroutine
 	fmt.Println("Waiting for messages...")
-	go listen(socket)
+	go listen(socketIn)
+
+	// Bootstrap us by sending a query for any raop entries
+	var msg DNSMessage
+	q := Question{
+		Name:  "_raop._tcp.local.",
+		Type:  255,
+		Class: 1,
+	}
+	msg.AddQuestion(q)
+	buffer, err := msg.Pack()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(buffer)
+
+	socketOut, err := net.DialUDP("udp", nil, &net.UDPAddr{
+		IP:   net.IPv4(224, 0, 0, 251),
+		Port: 5353,
+	})
+	if err != nil {
+		panic(err)
+	}
+	// Don't forget to close it!
+	defer socketOut.Close()
+
+	// Write the payload
+	/*_, err = socketOut.Write(buffer)
+	if err != nil {
+		panic(err)
+	}*/
 
 	// Wait for a keypress to exit
 	fmt.Println("Ctrl+C to exit")
@@ -50,15 +80,15 @@ func listen(socket *net.UDPConn) {
 	// Loop forever waiting for messages
 	for {
 		// Buffer for the message
-		buff := make([]byte, 4096)
+		buffer := make([]byte, 4096)
 		// Block and wait for a message on the socket
-		read, addr, err := socket.ReadFromUDP(buff)
+		read, addr, err := socket.ReadFromUDP(buffer)
 		if err != nil {
 			panic(err)
 		}
 
 		// Parse the buffer (up to "read" bytes) into a message object
-		err = msg.Parse(buff[:read])
+		err = msg.Parse(buffer[:read])
 		if err != nil {
 			panic(err)
 		}

@@ -281,6 +281,79 @@ func (rr *ResourceRecord) Parse(buffer []byte, offset int) (new_offset int, err 
 }
 
 //
+// Methods for creating a DNS record start here
+//
+
+func (msg *DNSMessage) AddQuestion(q Question) {
+	msg.Questions = append(msg.Questions, q)
+}
+
+func (msg *DNSMessage) Pack() (buffer []byte, e error) {
+	buffer = make([]byte, 4096)
+	offset := 0
+
+	// Header
+	buffer[offset] = byte(msg.Id >> 8)
+	buffer[offset+1] = byte(msg.Id)
+	offset += 2
+
+	bits := 0
+	if msg.IsResponse {
+		bits |= (1 << 7)
+	}
+	bits |= (msg.Opcode << 3)
+	if msg.IsAuthoritative {
+		bits |= (1 << 2)
+	}
+	if msg.IsTruncated {
+		bits |= (1 << 1)
+	}
+	if msg.IsRecursionDesired {
+		bits |= 1
+	}
+	buffer[offset] = byte(bits)
+	offset += 1
+
+	bits = 0
+	if msg.IsRecursionAvailable {
+		bits |= (1 << 7)
+	}
+	if msg.IsZero {
+		bits |= (1 << 6)
+	}
+	bits |= (msg.Rcode)
+	buffer[offset] = byte(bits)
+	offset += 1
+
+	questionCount := len(msg.Questions)
+	answerCount := len(msg.Answers)
+	nssCount := len(msg.Nss)
+	extraCount := len(msg.Extras)
+
+	buffer[offset] = byte(questionCount >> 8)
+	buffer[offset+1] = byte(questionCount)
+	offset += 2
+
+	buffer[offset] = byte(answerCount >> 8)
+	buffer[offset+1] = byte(answerCount)
+	offset += 2
+
+	buffer[offset] = byte(nssCount >> 8)
+	buffer[offset+1] = byte(nssCount)
+	offset += 2
+
+	buffer[offset] = byte(extraCount >> 8)
+	buffer[offset+1] = byte(extraCount)
+	offset += 2
+
+	// Questions
+
+	// Various RRs
+
+	return buffer[0:offset], nil
+}
+
+//
 // Formatting of messages to strings starts here
 //
 
