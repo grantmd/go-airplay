@@ -43,14 +43,14 @@ func main() {
 
 	q := Question{
 		Name:  "_raop._tcp.local.",
-		Type:  255, // ANY
+		Type:  12, // PTR
 		Class: 1,
 	}
 	msg.AddQuestion(q)
 
 	q = Question{
 		Name:  "_airplay._tcp.local.",
-		Type:  255, // ANY
+		Type:  12, // PTR
 		Class: 1,
 	}
 	msg.AddQuestion(q)

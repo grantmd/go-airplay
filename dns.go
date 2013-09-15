@@ -374,6 +374,7 @@ func (msg *DNSMessage) Pack() (buffer []byte, e error) {
 	}
 
 	// Various RRs
+	// TODO
 
 	return buffer[0:offset], nil
 }
