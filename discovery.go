@@ -24,7 +24,7 @@ import (
 func main() {
 	fmt.Println("Starting up...")
 	// Listen on the multicast address and port
-	socketIn, err := net.ListenMulticastUDP("udp", nil, &net.UDPAddr{
+	socket, err := net.ListenMulticastUDP("udp", nil, &net.UDPAddr{
 		IP:   net.IPv4(224, 0, 0, 251),
 		Port: 5353,
 	})
@@ -32,25 +32,25 @@ func main() {
 		panic(err)
 	}
 	// Don't forget to close it!
-	defer socketIn.Close()
+	defer socket.Close()
 
 	// Put the listener in its own goroutine
 	fmt.Println("Waiting for messages...")
-	go listen(socketIn)
+	go listen(socket)
 
 	// Bootstrap us by sending a query for any airplay-related entries
 	var msg DNSMessage
 
 	q := Question{
 		Name:  "_raop._tcp.local.",
-		Type:  12, // PTR
+		Type:  255, // ANY
 		Class: 1,
 	}
 	msg.AddQuestion(q)
 
 	q = Question{
 		Name:  "_airplay._tcp.local.",
-		Type:  12, // PTR
+		Type:  255, // ANY
 		Class: 1,
 	}
 	msg.AddQuestion(q)
@@ -60,18 +60,11 @@ func main() {
 		panic(err)
 	}
 
-	socketOut, err := net.DialUDP("udp", nil, &net.UDPAddr{
+	// Write the payload
+	_, err = socket.WriteToUDP(buffer, &net.UDPAddr{
 		IP:   net.IPv4(224, 0, 0, 251),
 		Port: 5353,
 	})
-	if err != nil {
-		panic(err)
-	}
-	// Don't forget to close it!
-	defer socketOut.Close()
-
-	// Write the payload
-	_, err = socketIn.Write(buffer)
 	if err != nil {
 		panic(err)
 	}
