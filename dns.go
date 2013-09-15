@@ -347,6 +347,31 @@ func (msg *DNSMessage) Pack() (buffer []byte, e error) {
 	offset += 2
 
 	// Questions
+	for i := 0; i < questionCount; i++ {
+		bs := []byte(msg.Questions[i].Name)
+		length := 0
+		for j := 0; j < len(bs); j++ {
+			if bs[j] == 0x2e {
+				buffer[offset] = byte(length)
+				offset += length + 1
+				length = 0
+				continue
+			}
+
+			buffer[offset+length+1] = bs[j]
+			length++
+		}
+		buffer[offset] = 0x00
+		offset++
+
+		buffer[offset] = byte(msg.Questions[i].Type >> 8)
+		buffer[offset+1] = byte(msg.Questions[i].Type)
+		offset += 2
+
+		buffer[offset] = byte(msg.Questions[i].Class >> 8)
+		buffer[offset+1] = byte(msg.Questions[i].Class)
+		offset += 2
+	}
 
 	// Various RRs
 

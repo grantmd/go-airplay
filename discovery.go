@@ -7,6 +7,8 @@
 // http://www.ietf.org/rfc/rfc6762.txt - Multicast DNS
 // http://www.ietf.org/rfc/rfc6763.txt - DNS-Based Service Discovery
 //
+// http://nto.github.io/AirPlay.html - Unofficial AirPlay Protocol Specification
+//
 
 package main
 
@@ -36,19 +38,27 @@ func main() {
 	fmt.Println("Waiting for messages...")
 	go listen(socketIn)
 
-	// Bootstrap us by sending a query for any raop entries
+	// Bootstrap us by sending a query for any airplay-related entries
 	var msg DNSMessage
+
 	q := Question{
 		Name:  "_raop._tcp.local.",
-		Type:  255,
+		Type:  12, // PTR
 		Class: 1,
 	}
 	msg.AddQuestion(q)
+
+	q = Question{
+		Name:  "_airplay._tcp.local.",
+		Type:  12, // PTR
+		Class: 1,
+	}
+	msg.AddQuestion(q)
+
 	buffer, err := msg.Pack()
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(buffer)
 
 	socketOut, err := net.DialUDP("udp", nil, &net.UDPAddr{
 		IP:   net.IPv4(224, 0, 0, 251),
@@ -61,10 +71,10 @@ func main() {
 	defer socketOut.Close()
 
 	// Write the payload
-	/*_, err = socketOut.Write(buffer)
+	_, err = socketOut.Write(buffer)
 	if err != nil {
 		panic(err)
-	}*/
+	}
 
 	// Wait for a keypress to exit
 	fmt.Println("Ctrl+C to exit")
