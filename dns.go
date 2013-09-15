@@ -431,6 +431,8 @@ var TypeToString = map[uint16]string{
 	28: "AAAA",
 	33: "SRV",
 
+	47: "NSEC",
+
 	252: "AXFR",
 	253: "MAILB",
 	254: "MAILA",
