@@ -15,6 +15,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"strings"
 )
 
 //
@@ -36,7 +37,8 @@ func main() {
 
 	// Put the listener in its own goroutine
 	fmt.Println("Waiting for messages...")
-	go listen(socket)
+	msgs := make(chan DNSMessage)
+	go listen(socket, msgs)
 
 	// Bootstrap us by sending a query for any airplay-related entries
 	var msg DNSMessage
@@ -69,23 +71,23 @@ func main() {
 		panic(err)
 	}
 
-	// Wait for a keypress to exit
+	// Wait for a message from the listen goroutine
 	fmt.Println("Ctrl+C to exit")
-	var input string
 	for {
-		fmt.Scanln(&input)
+		msg = <-msgs
+		fmt.Println(msg.String())
 	}
 }
 
 // Listen on a socket for multicast records and parse them
-func listen(socket *net.UDPConn) {
+func listen(socket *net.UDPConn, msgs chan DNSMessage) {
 	var msg DNSMessage
 	// Loop forever waiting for messages
 	for {
 		// Buffer for the message
 		buffer := make([]byte, 4096)
 		// Block and wait for a message on the socket
-		read, addr, err := socket.ReadFromUDP(buffer)
+		read, _, err := socket.ReadFromUDP(buffer)
 		if err != nil {
 			panic(err)
 		}
@@ -97,6 +99,24 @@ func listen(socket *net.UDPConn) {
 		}
 
 		// Print out the source address and the message
-		fmt.Printf("\nBroadcast from %s:\n%s\n", addr, msg.String())
+		//fmt.Printf("\nBroadcast from %s:\n%s\n", addr, msg.String())
+
+		// Does this have answers we are interested in? If so, return the whole messaage since the rest of it (Extras in particular)
+		// is probably relevant
+		for i := range msg.Answers {
+			rr := &msg.Answers[i]
+
+			// PTRs only
+			if rr.Type != 12 {
+				continue
+			}
+
+			// Is this an airplay address
+			nameParts := strings.Split(rr.Name, ".")
+			if nameParts[0] == "_raop" || nameParts[1] == "_airplay" {
+				//fmt.Println(msg.String())
+				msgs <- msg
+			}
+		}
 	}
 }
