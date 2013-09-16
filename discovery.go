@@ -18,6 +18,18 @@ import (
 	"strings"
 )
 
+var (
+	Devices []AirplayDevice
+)
+
+type AirplayDevice struct {
+	Name     string
+	Hostname string
+	IP       net.IP
+	Port     uint16
+	Flags    []string
+}
+
 //
 // Main functions for starting up and listening for records start here
 //
@@ -75,7 +87,75 @@ func main() {
 	fmt.Println("Ctrl+C to exit")
 	for {
 		msg = <-msgs
-		fmt.Println(msg.String())
+
+		// Look for new devices
+		for i := range msg.Answers {
+			rr := &msg.Answers[i]
+
+			// PTRs only
+			if rr.Type != 12 {
+				continue
+			}
+
+			// Figure out the name of this thing
+			nameParts := strings.Split(rr.Rdata.(PTRRecord).Name, ".")
+			deviceName := nameParts[0]
+
+			// If this is a device we already know about, then ignore it
+			// Otherwise, add it
+			index := -1
+			for i := range Devices {
+				if Devices[i].Name == deviceName {
+					index = i
+					break
+				}
+			}
+
+			if index == -1 {
+				Devices = append(Devices, AirplayDevice{
+					Name: deviceName,
+				})
+
+				index = len(Devices) - 1
+			}
+		}
+
+		// See if the rest of the information for this device is in Extras
+		for i := range msg.Extras {
+			rr := &msg.Extras[i]
+
+			// Figure out the name of this thing
+			nameParts := strings.Split(rr.Name, ".")
+			deviceName := nameParts[0]
+
+			// Find our existing device
+			for j := range Devices {
+				if Devices[j].Name == deviceName || Devices[j].Hostname == rr.Name {
+					// Found it, now update it
+					switch rr.Type {
+					case 1: // A
+						Devices[j].IP = rr.Rdata.(ARecord).Address
+						break
+
+					case 16: // TXT
+						Devices[j].Flags = rr.Rdata.(TXTRecord).CStrings
+						break
+
+					case 33: // SRV
+						srv := rr.Rdata.(SRVRecord)
+						Devices[j].Hostname = srv.Target
+						Devices[j].Port = srv.Port
+						break
+					}
+					break
+				}
+			}
+		}
+
+		// Ask for info on devices we don't have all the information about
+		// TODO: Do this on a timer so we're not asking for things too often
+
+		fmt.Printf("%+v\n", Devices)
 	}
 }
 
