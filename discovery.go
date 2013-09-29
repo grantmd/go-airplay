@@ -130,7 +130,9 @@ func Discover(devices chan []AirplayDevice) {
 					// Found it, now update it
 					switch rr.Type {
 					case 1: // A
-						deviceList[j].IP = rr.Rdata.(ARecord).Address
+						if rr.Rdata.(ARecord).Address.IsLinkLocalUnicast() == false {
+							deviceList[j].IP = rr.Rdata.(ARecord).Address
+						}
 						break
 
 					case 16: // TXT
