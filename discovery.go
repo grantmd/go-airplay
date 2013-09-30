@@ -13,7 +13,9 @@
 package main
 
 import (
+	"fmt"
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -26,7 +28,7 @@ type AirplayDevice struct {
 	Hostname string
 	IP       net.IP
 	Port     uint16
-	Flags    []string
+	Flags    map[string]string
 }
 
 //
@@ -136,7 +138,12 @@ func Discover(devices chan []AirplayDevice) {
 						break
 
 					case 16: // TXT
-						deviceList[j].Flags = rr.Rdata.(TXTRecord).CStrings
+						flags := rr.Rdata.(TXTRecord).CStrings
+						deviceList[j].Flags = make(map[string]string, len(flags))
+						for _, flag := range flags {
+							parts := strings.SplitN(flag, "=", 2)
+							deviceList[j].Flags[parts[0]] = parts[1]
+						}
 						break
 
 					case 33: // SRV
@@ -194,4 +201,191 @@ func listen(socket *net.UDPConn, msgs chan DNSMessage) {
 			}
 		}
 	}
+}
+
+func (a *AirplayDevice) AudioChannels() int {
+	c, err := strconv.Atoi(a.Flags["ch"])
+	if err != nil {
+		return 0
+	}
+
+	return c
+}
+
+func (a *AirplayDevice) AudioCodecs() []int {
+	parts := strings.Split(a.Flags["cn"], ",")
+	codecs := make([]int, len(parts))
+
+	for i, c := range parts {
+		c1, err := strconv.Atoi(c)
+		if err != nil {
+			c1 = -1
+		}
+		codecs[i] = c1
+	}
+
+	return codecs
+}
+
+func (a *AirplayDevice) EncryptionTypes() []int {
+	parts := strings.Split(a.Flags["et"], ",")
+	types := make([]int, len(parts))
+
+	for i, t := range parts {
+		t1, err := strconv.Atoi(t)
+		if err != nil {
+			t1 = -1
+		}
+		types[i] = t1
+	}
+
+	return types
+}
+
+func (a *AirplayDevice) MetadataTypes() []int {
+	parts := strings.Split(a.Flags["md"], ",")
+	types := make([]int, len(parts))
+
+	for i, t := range parts {
+		t1, err := strconv.Atoi(t)
+		if err != nil {
+			t1 = -1
+		}
+		types[i] = t1
+	}
+
+	return types
+}
+
+func (a *AirplayDevice) RequiresPassword() bool {
+	if a.Flags["pw"] == "true" {
+		return true
+	}
+
+	return false
+}
+
+func (a *AirplayDevice) AudioSampleRate() int {
+	c, err := strconv.Atoi(a.Flags["sr"])
+	if err != nil {
+		return 0
+	}
+
+	return c
+}
+
+func (a *AirplayDevice) AudioSampleSize() int {
+	c, err := strconv.Atoi(a.Flags["ss"])
+	if err != nil {
+		return 0
+	}
+
+	return c
+}
+
+func (a *AirplayDevice) Transports() []string {
+	return strings.Split(a.Flags["tp"], ",")
+}
+
+func (a *AirplayDevice) ServerVersion() string {
+	return a.Flags["vs"]
+}
+
+func (a *AirplayDevice) DeviceModel() string {
+	return a.Flags["am"]
+}
+
+func (a *AirplayDevice) String() (str string) {
+	str += fmt.Sprintf("%s (%s:%d)\n", a.Name, a.IP, a.Port)
+	str += fmt.Sprintf("Device: %s v%s\n", a.DeviceModel(), a.ServerVersion())
+	str += fmt.Sprintf("Audio Channels: %d, Sample: %dHz (%d-bit)\n", a.AudioChannels(), a.AudioSampleRate(), a.AudioSampleSize())
+
+	str += "Supported Codecs: "
+	for i, c := range a.AudioCodecs() {
+		if i > 0 {
+			str += ", "
+		}
+
+		switch c {
+		case 0:
+			str += "PCM"
+			break
+		case 1:
+			str += "Apple Lossless (ALAC)"
+			break
+		case 2:
+			str += "AAC"
+			break
+		case 3:
+			str += "AAC ELD (Enhanced Low Delay)"
+			break
+		default:
+			str += "Unknown"
+			break
+		}
+	}
+	str += "\n"
+
+	str += "Supported Encryption Types: "
+	for i, t := range a.EncryptionTypes() {
+		if i > 0 {
+			str += ", "
+		}
+
+		switch t {
+		case 0:
+			str += "None"
+			break
+		case 1:
+			str += "RSA (AirPort Express)"
+			break
+		case 2:
+			str += "FairPlay"
+			break
+		case 3:
+			str += "MFiSAP (3rd-party devices)"
+			break
+		case 4:
+			str += "FairPlay SAPv2.5"
+			break
+		default:
+			str += "Unknown"
+			break
+		}
+	}
+	str += "\n"
+
+	str += "Supported Metadata Types: "
+	for i, t := range a.MetadataTypes() {
+		if i > 0 {
+			str += ", "
+		}
+
+		switch t {
+		case 0:
+			str += "text"
+			break
+		case 1:
+			str += "artwork"
+			break
+		case 2:
+			str += "progress"
+			break
+		default:
+			str += "Unknown"
+			break
+		}
+	}
+	str += "\n"
+
+	str += fmt.Sprintf("Transports: %s\n", strings.Join(a.Transports(), ", "))
+
+	str += "Requires Password: "
+	if a.RequiresPassword() {
+		str += "Yes"
+	} else {
+		str += "No"
+	}
+
+	return str
 }

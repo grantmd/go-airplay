@@ -30,7 +30,7 @@ func main() {
 
 	deviceList = <-deviceChan
 
-	fmt.Printf("%+v\n", deviceList)
+	fmt.Println(deviceList[0].String())
 
 	// Connect to the first one
 	// TODO: Validate the TXT record properties first?
