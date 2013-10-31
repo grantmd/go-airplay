@@ -2,7 +2,7 @@
 // Tests formed from actual DNS records I have seen on my local network
 //
 
-package main
+package airplay
 
 import (
 	"encoding/hex"

@@ -11,7 +11,7 @@
 // http://www.ietf.org/rfc/rfc3596.txt - DNS Extensions to Support IP Version 6
 //
 
-package main
+package airplay
 
 import (
 	//"encoding/hex"

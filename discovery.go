@@ -10,7 +10,7 @@
 // http://nto.github.io/AirPlay.html - Unofficial AirPlay Protocol Specification
 //
 
-package main
+package airplay
 
 import (
 	"fmt"

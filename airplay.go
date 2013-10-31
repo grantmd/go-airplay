@@ -1,4 +1,4 @@
-package main
+package airplay
 
 import (
 	"crypto/md5"
@@ -20,27 +20,6 @@ var (
 	ErrNoOptions        = errors.New("Airplay server did not respond to OPTIONS request")
 	ErrInvalidOptions   = errors.New("Airplay server reported invalid OPTIONS")
 )
-
-func main() {
-	// Discover some devices
-	fmt.Println("Looking for devices...")
-
-	deviceChan := make(chan []AirplayDevice)
-	go Discover(deviceChan)
-
-	deviceList = <-deviceChan
-
-	fmt.Println(deviceList[0].String())
-
-	// Connect to the first one
-	// TODO: Validate the TXT record properties first?
-	_, err := Dial(deviceList[0].IP, deviceList[0].Port, "")
-	if err != nil {
-		panic(err)
-	}
-
-	// We connected, now announce something
-}
 
 type Airplay struct {
 	Password    string
