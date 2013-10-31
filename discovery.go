@@ -86,6 +86,8 @@ func Discover(devices chan []AirplayDevice) {
 	for {
 		msg = <-msgs
 
+		//fmt.Println(msg.String())
+
 		// Look for new devices
 		for i := range msg.Answers {
 			rr := &msg.Answers[i]
@@ -119,40 +121,45 @@ func Discover(devices chan []AirplayDevice) {
 		}
 
 		// See if the rest of the information for this device is in Extras
-		for i := range msg.Extras {
-			rr := &msg.Extras[i]
+		processing := true
+		for processing {
+			for i := range msg.Extras {
+				rr := &msg.Extras[i]
+				//fmt.Println(rr.String())
 
-			// Figure out the name of this thing
-			nameParts := strings.Split(rr.Name, ".")
-			deviceName := nameParts[0]
+				// Figure out the name of this thing
+				nameParts := strings.Split(rr.Name, ".")
+				deviceName := nameParts[0]
 
-			// Find our existing device
-			for j := range deviceList {
-				if deviceList[j].Name == deviceName || deviceList[j].Hostname == rr.Name {
-					// Found it, now update it
-					switch rr.Type {
-					case 1: // A
-						if rr.Rdata.(ARecord).Address.IsGlobalUnicast() {
-							deviceList[j].IP = rr.Rdata.(ARecord).Address
+				// Find our existing device
+				for j := range deviceList {
+					if deviceList[j].Name == deviceName || deviceList[j].Hostname == rr.Name {
+						// Found it, now update it
+						switch rr.Type {
+						case 1: // A
+							if rr.Rdata.(ARecord).Address.IsGlobalUnicast() {
+								deviceList[j].IP = rr.Rdata.(ARecord).Address
+								processing = false
+							}
+							break
+
+						case 16: // TXT
+							flags := rr.Rdata.(TXTRecord).CStrings
+							deviceList[j].Flags = make(map[string]string, len(flags))
+							for _, flag := range flags {
+								parts := strings.SplitN(flag, "=", 2)
+								deviceList[j].Flags[parts[0]] = parts[1]
+							}
+							break
+
+						case 33: // SRV
+							srv := rr.Rdata.(SRVRecord)
+							deviceList[j].Hostname = srv.Target
+							deviceList[j].Port = srv.Port
+							break
 						}
-						break
-
-					case 16: // TXT
-						flags := rr.Rdata.(TXTRecord).CStrings
-						deviceList[j].Flags = make(map[string]string, len(flags))
-						for _, flag := range flags {
-							parts := strings.SplitN(flag, "=", 2)
-							deviceList[j].Flags[parts[0]] = parts[1]
-						}
-						break
-
-					case 33: // SRV
-						srv := rr.Rdata.(SRVRecord)
-						deviceList[j].Hostname = srv.Target
-						deviceList[j].Port = srv.Port
 						break
 					}
-					break
 				}
 			}
 		}
