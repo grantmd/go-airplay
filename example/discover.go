@@ -16,16 +16,24 @@ func main() {
 	deviceChan := make(chan []airplay.AirplayDevice)
 	go airplay.Discover(deviceChan)
 
-	deviceList = <-deviceChan
+	for {
+		deviceList = <-deviceChan
 
-	fmt.Println(deviceList[0].String())
+		for i := range deviceList {
+			fmt.Printf("%d:\n", i)
+			fmt.Println(deviceList[i].String())
+		}
+		fmt.Println()
 
-	// Connect to the first one
-	// TODO: Validate the TXT record properties first?
-	_, err := airplay.Dial(deviceList[0].IP, deviceList[0].Port, "")
-	if err != nil {
-		panic(err)
+		/*
+			// Connect to the first one
+			// TODO: Validate the TXT record properties first?
+			_, err := airplay.Dial(deviceList[0].IP, deviceList[0].Port, "")
+			if err != nil {
+				panic(err)
+			}
+
+			// We connected, now announce something
+		*/
 	}
-
-	// We connected, now announce something
 }

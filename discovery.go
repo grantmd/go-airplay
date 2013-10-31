@@ -28,6 +28,7 @@ type AirplayDevice struct {
 	Hostname string
 	IP       net.IP
 	Port     uint16
+	Type     string
 	Flags    map[string]string
 }
 
@@ -99,9 +100,18 @@ func Discover(devices chan []AirplayDevice) {
 
 			// Figure out the name of this thing
 			nameParts := strings.Split(rr.Rdata.(PTRRecord).Name, ".")
-			deviceName := nameParts[0]
 
-			// If this is a device we already know about, then ignore it
+			deviceName := nameParts[0]
+			deviceType := ""
+			if nameParts[1] == "_raop" || nameParts[1] == "_airplay" {
+				deviceType = "airplay"
+			} else if nameParts[1] == "_touch-remote" {
+				deviceType = "remote"
+			} else {
+				continue
+			}
+
+			// If this is a device we already know about, then update it
 			// Otherwise, add it
 			index := -1
 			for i := range deviceList {
@@ -114,54 +124,17 @@ func Discover(devices chan []AirplayDevice) {
 			if index == -1 {
 				deviceList = append(deviceList, AirplayDevice{
 					Name: deviceName,
+					Type: deviceType,
 				})
 
 				index = len(deviceList) - 1
+			} else {
+				deviceList[index].Type = deviceType
 			}
 		}
 
-		// See if the rest of the information for this device is in Extras
-		processing := true
-		for processing {
-			for i := range msg.Extras {
-				rr := &msg.Extras[i]
-				//fmt.Println(rr.String())
-
-				// Figure out the name of this thing
-				nameParts := strings.Split(rr.Name, ".")
-				deviceName := nameParts[0]
-
-				// Find our existing device
-				for j := range deviceList {
-					if deviceList[j].Name == deviceName || deviceList[j].Hostname == rr.Name {
-						// Found it, now update it
-						switch rr.Type {
-						case 1: // A
-							if rr.Rdata.(ARecord).Address.IsGlobalUnicast() {
-								deviceList[j].IP = rr.Rdata.(ARecord).Address
-								processing = false
-							}
-							break
-
-						case 16: // TXT
-							flags := rr.Rdata.(TXTRecord).CStrings
-							deviceList[j].Flags = make(map[string]string, len(flags))
-							for _, flag := range flags {
-								parts := strings.SplitN(flag, "=", 2)
-								deviceList[j].Flags[parts[0]] = parts[1]
-							}
-							break
-
-						case 33: // SRV
-							srv := rr.Rdata.(SRVRecord)
-							deviceList[j].Hostname = srv.Target
-							deviceList[j].Port = srv.Port
-							break
-						}
-						break
-					}
-				}
-			}
+		for i := range deviceList {
+			deviceList[i].updateFromDNS(&msg)
 		}
 
 		// TODO: Ask for info on devices we don't have all the information about
@@ -191,7 +164,7 @@ func listen(socket *net.UDPConn, msgs chan DNSMessage) {
 			panic(err)
 		}
 
-		// Does this have answers we are interested in? If so, return the whole messaage since the rest of it (Extras in particular)
+		// Does this have answers we are interested in? If so, return the whole message since the rest of it (Extras in particular)
 		// is probably relevant
 		for i := range msg.Answers {
 			rr := &msg.Answers[i]
@@ -203,11 +176,87 @@ func listen(socket *net.UDPConn, msgs chan DNSMessage) {
 
 			// Is this an airplay address
 			nameParts := strings.Split(rr.Name, ".")
-			if nameParts[0] == "_raop" || nameParts[1] == "_airplay" {
+			if nameParts[0] == "_raop" || nameParts[0] == "_airplay" {
+				msgs <- msg
+			} else if nameParts[0] == "_touch-remote" {
 				msgs <- msg
 			}
 		}
 	}
+}
+
+func (a *AirplayDevice) updateFromDNS(msg *DNSMessage) {
+	//fmt.Println(msg)
+	loop := true
+	for loop {
+		loop = false
+		for i := range msg.Answers {
+			rr := &msg.Answers[i]
+			//fmt.Println(rr.String())
+
+			// Figure out the name of this thing
+			nameParts := strings.Split(rr.Name, ".")
+			deviceName := nameParts[0]
+
+			if a.Name == deviceName || a.Hostname == rr.Name {
+				// Found it, now update it
+				startOver := a.updateFromRR(rr)
+				if startOver == true {
+					loop = true
+				}
+			}
+		}
+
+		// See if the rest of the information for this device is in Extras
+		for i := range msg.Extras {
+			rr := &msg.Extras[i]
+			//fmt.Println(rr.String())
+
+			// Figure out the name of this thing
+			nameParts := strings.Split(rr.Name, ".")
+			deviceName := nameParts[0]
+
+			// Find our existing device
+			if a.Name == deviceName || a.Hostname == rr.Name {
+				// Found it, now update it
+				startOver := a.updateFromRR(rr)
+				if startOver == true {
+					loop = true
+				}
+			}
+		}
+	}
+}
+
+func (a *AirplayDevice) updateFromRR(rr *ResourceRecord) (startOver bool) {
+	startOver = false
+	switch rr.Type {
+	case 1: // A
+		if rr.Rdata.(ARecord).Address.IsGlobalUnicast() {
+			a.IP = rr.Rdata.(ARecord).Address
+		}
+		break
+
+	case 16: // TXT
+		flags := rr.Rdata.(TXTRecord).CStrings
+		a.Flags = make(map[string]string, len(flags))
+		for _, flag := range flags {
+			parts := strings.SplitN(flag, "=", 2)
+			a.Flags[parts[0]] = parts[1]
+		}
+		break
+
+	case 33: // SRV
+		srv := rr.Rdata.(SRVRecord)
+		if a.Hostname != srv.Target {
+			startOver = true // We changed hostname, so we need to start over
+		}
+		a.Hostname = srv.Target
+		a.Port = srv.Port
+		break
+	}
+
+	return startOver
 }
 
 func (a *AirplayDevice) AudioChannels() int {
@@ -303,95 +352,101 @@ func (a *AirplayDevice) DeviceModel() string {
 }
 
 func (a *AirplayDevice) String() (str string) {
-	str += fmt.Sprintf("%s (%s:%d)\n", a.Name, a.IP, a.Port)
-	str += fmt.Sprintf("Device: %s v%s\n", a.DeviceModel(), a.ServerVersion())
-	str += fmt.Sprintf("Audio Channels: %d, Sample: %dHz (%d-bit)\n", a.AudioChannels(), a.AudioSampleRate(), a.AudioSampleSize())
+	if a.Type == "airplay" {
+		str += fmt.Sprintf("%s (%s:%d)\n", a.Name, a.IP, a.Port)
+		str += fmt.Sprintf("Device: %s v%s\n", a.DeviceModel(), a.ServerVersion())
+		str += fmt.Sprintf("Audio Channels: %d, Sample: %dHz (%d-bit)\n", a.AudioChannels(), a.AudioSampleRate(), a.AudioSampleSize())
 
-	str += "Supported Codecs: "
-	for i, c := range a.AudioCodecs() {
-		if i > 0 {
-			str += ", "
+		str += "Supported Codecs: "
+		for i, c := range a.AudioCodecs() {
+			if i > 0 {
+				str += ", "
+			}
+
+			switch c {
+			case 0:
+				str += "PCM"
+				break
+			case 1:
+				str += "Apple Lossless (ALAC)"
+				break
+			case 2:
+				str += "AAC"
+				break
+			case 3:
+				str += "AAC ELD (Enhanced Low Delay)"
+				break
+			default:
+				str += "Unknown"
+				break
+			}
 		}
+		str += "\n"
 
-		switch c {
-		case 0:
-			str += "PCM"
-			break
-		case 1:
-			str += "Apple Lossless (ALAC)"
-			break
-		case 2:
-			str += "AAC"
-			break
-		case 3:
-			str += "AAC ELD (Enhanced Low Delay)"
-			break
-		default:
-			str += "Unknown"
-			break
+		str += "Supported Encryption Types: "
+		for i, t := range a.EncryptionTypes() {
+			if i > 0 {
+				str += ", "
+			}
+
+			switch t {
+			case 0:
+				str += "None"
+				break
+			case 1:
+				str += "RSA (AirPort Express)"
+				break
+			case 2:
+				str += "FairPlay"
+				break
+			case 3:
+				str += "MFiSAP (3rd-party devices)"
+				break
+			case 4:
+				str += "FairPlay SAPv2.5"
+				break
+			default:
+				str += "Unknown"
+				break
+			}
 		}
-	}
-	str += "\n"
+		str += "\n"
 
-	str += "Supported Encryption Types: "
-	for i, t := range a.EncryptionTypes() {
-		if i > 0 {
-			str += ", "
+		str += "Supported Metadata Types: "
+		for i, t := range a.MetadataTypes() {
+			if i > 0 {
+				str += ", "
+			}
+
+			switch t {
+			case 0:
+				str += "text"
+				break
+			case 1:
+				str += "artwork"
+				break
+			case 2:
+				str += "progress"
+				break
+			default:
+				str += "Unknown"
+				break
+			}
 		}
+		str += "\n"
 
-		switch t {
-		case 0:
-			str += "None"
-			break
-		case 1:
-			str += "RSA (AirPort Express)"
-			break
-		case 2:
-			str += "FairPlay"
-			break
-		case 3:
-			str += "MFiSAP (3rd-party devices)"
-			break
-		case 4:
-			str += "FairPlay SAPv2.5"
-			break
-		default:
-			str += "Unknown"
-			break
+		str += fmt.Sprintf("Transports: %s\n", strings.Join(a.Transports(), ", "))
+
+		str += "Requires Password: "
+		if a.RequiresPassword() {
+			str += "Yes"
+		} else {
+			str += "No"
 		}
-	}
-	str += "\n"
-
-	str += "Supported Metadata Types: "
-	for i, t := range a.MetadataTypes() {
-		if i > 0 {
-			str += ", "
-		}
-
-		switch t {
-		case 0:
-			str += "text"
-			break
-		case 1:
-			str += "artwork"
-			break
-		case 2:
-			str += "progress"
-			break
-		default:
-			str += "Unknown"
-			break
-		}
-	}
-	str += "\n"
-
-	str += fmt.Sprintf("Transports: %s\n", strings.Join(a.Transports(), ", "))
-
-	str += "Requires Password: "
-	if a.RequiresPassword() {
-		str += "Yes"
+	} else if a.Type == "remote" {
+		str += "Remote"
 	} else {
-		str += "No"
+		str += "Unsupported device"
 	}
 
 	return str
