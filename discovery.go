@@ -352,8 +352,9 @@ func (a *AirplayDevice) DeviceModel() string {
 }
 
 func (a *AirplayDevice) String() (str string) {
+	str += fmt.Sprintf("%s (%s:%d)\n", a.Name, a.IP, a.Port)
+
 	if a.Type == "airplay" {
-		str += fmt.Sprintf("%s (%s:%d)\n", a.Name, a.IP, a.Port)
 		str += fmt.Sprintf("Device: %s v%s\n", a.DeviceModel(), a.ServerVersion())
 		str += fmt.Sprintf("Audio Channels: %d, Sample: %dHz (%d-bit)\n", a.AudioChannels(), a.AudioSampleRate(), a.AudioSampleSize())
 
@@ -444,7 +445,9 @@ func (a *AirplayDevice) String() (str string) {
 			str += "No"
 		}
 	} else if a.Type == "remote" {
-		str += "Remote"
+		str += fmt.Sprintf("Device: %s (%s)\n", a.Flags["DvNm"], a.Flags["DvTy"])
+		str += fmt.Sprintf("Remote: %s v%s\n", a.Flags["RemN"], a.Flags["RemV"])
+		str += fmt.Sprintf("Pair Code: %s", a.Flags["Pair"])
 	} else {
 		str += "Unsupported device"
 	}
