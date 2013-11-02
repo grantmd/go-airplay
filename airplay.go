@@ -75,6 +75,14 @@ func Dial(ip net.IP, port uint16, password string) (a Airplay, err error) {
 	return a, nil
 }
 
+func (a *Airplay) IsConnected() bool {
+	if a.conn == nil {
+		return false
+	}
+
+	return true
+}
+
 func (a *Airplay) makeRequest(method string, path string) (resp http.Response, err error) {
 	a.cseq++
 	err = a.conn.PrintfLine("%s %s RTSP/1.0", method, path)
