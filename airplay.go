@@ -15,6 +15,7 @@ import (
 	"net"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -35,9 +36,13 @@ type Airplay struct {
 	nonce       string
 	realm       string
 	cseq        int
+	ip          net.IP
+	port        uint16
 }
 
 func Dial(ip net.IP, port uint16, password string) (a Airplay, err error) {
+	a.ip = ip
+	a.port = port
 	a.Password = password
 	uuid, err := uuid.NewV4()
 	if err != nil {
@@ -105,7 +110,7 @@ func (a *Airplay) GetServerInfo() (err error) {
 func (a *Airplay) Announce() (err error) {
 	u := url.URL{
 		Scheme: "rtsp",
-		Host:   ip.String() + ":" + strconv.Itoa(int(port)),
+		Host:   a.ip.String() + ":" + strconv.Itoa(int(a.port)),
 		Path:   "/test",
 	}
 

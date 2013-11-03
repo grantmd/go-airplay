@@ -8,29 +8,51 @@
 package airplay
 
 import (
+	"crypto/md5"
+	"errors"
 	"fmt"
 	"io/ioutil"
-	"net"
 	"net/http"
 	"net/url"
 	"strconv"
+)
+
+var (
+	ErrBadPin = errors.New("Invalid pin")
 )
 
 type Remote struct {
 	pin string
 }
 
-func Pair(ip net.IP, port uint16, pin string) (r Remote, err error) {
+func Pair(device AirplayDevice, pin string) (r Remote, err error) {
+	// TODO: Validate pin
 	r.pin = pin
+
+	// md5(pairingcode1-2-3-4-)
+	codeBytes := []byte(device.Flags["Pair"])
+	codeLength := len(codeBytes)
+	pairingcode := make([]byte, codeLength+8)
+	for i := range codeBytes {
+		pairingcode[i] = codeBytes[i]
+	}
+
+	pinBytes := []byte(pin)
+	pairingcode[codeLength] = pinBytes[0]
+	pairingcode[codeLength+2] = pinBytes[1]
+	pairingcode[codeLength+4] = pinBytes[2]
+	pairingcode[codeLength+6] = pinBytes[3]
+
+	hash := md5.New()
+	hash.Write(pairingcode)
 
 	// Immediately make a connection, just to make sure we can connect
 	u := url.URL{
 		Scheme:   "http",
-		Host:     ip.String() + ":" + strconv.Itoa(int(port)),
+		Host:     device.IP.String() + ":" + strconv.Itoa(int(device.Port)),
 		Path:     "/pair",
-		RawQuery: "pairingcode=75D809650423A40091193AA4944D1FBD&servicename=D19BB75C3773B485",
+		RawQuery: fmt.Sprintf("pairingcode=%s&servicename=%s", fmt.Sprintf("%X", hash.Sum(nil)), device.Name),
 	}
-	fmt.Println(u.String())
 	resp, err := http.Get(u.String())
 	if err != nil {
 		return r, err
@@ -39,6 +61,10 @@ func Pair(ip net.IP, port uint16, pin string) (r Remote, err error) {
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return r, err
+	}
+
+	if resp.StatusCode != 200 {
+		return r, ErrBadPin
 	}
 
 	fmt.Println("Body:")

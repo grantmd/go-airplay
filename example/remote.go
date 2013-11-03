@@ -38,7 +38,7 @@ func main() {
 			}
 			//fmt.Println()
 
-			_, err = airplay.Pair(deviceList[i].IP, deviceList[i].Port, string(line))
+			_, err = airplay.Pair(deviceList[i], string(line))
 			if err != nil {
 				panic(err)
 			}
