@@ -46,7 +46,7 @@ func Dial(ip net.IP, port uint16, password string) (a Airplay, err error) {
 		return a, err
 	}
 
-	resp, err := a.makeRequest("OPTIONS", "*")
+	resp, err := a.makeRTSPRequest("OPTIONS", "*")
 	if err != nil {
 		return a, err
 	}
@@ -83,7 +83,17 @@ func (a *Airplay) IsConnected() bool {
 	return true
 }
 
-func (a *Airplay) makeRequest(method string, path string) (resp http.Response, err error) {
+func (a *Airplay) GetServerInfo() (err error) {
+	resp, err := a.makeHTTPRequest("GET", "/server-info")
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(resp.Body)
+	return nil
+}
+
+func (a *Airplay) makeRTSPRequest(method string, path string) (resp http.Response, err error) {
 	a.cseq++
 	err = a.conn.PrintfLine("%s %s RTSP/1.0", method, path)
 	if err != nil {
@@ -186,7 +196,121 @@ func (a *Airplay) makeRequest(method string, path string) (resp http.Response, e
 			}
 
 			// Make another request with the new auth information
-			return a.makeRequest(method, path)
+			return a.makeRTSPRequest(method, path)
+
+		} else {
+			// We've already tried auth and failed
+			return resp, ErrPasswordInvalid
+		}
+	}
+
+	return resp, nil
+}
+
+func (a *Airplay) makeHTTPRequest(method string, path string) (resp http.Response, err error) {
+	a.cseq++
+	err = a.conn.PrintfLine("%s %s HTTP/1.1", method, path)
+	if err != nil {
+		return resp, err
+	}
+
+	a.conn.PrintfLine("Content-Length: 0")
+	a.conn.PrintfLine("User-Agent: go-airplay/1.0")
+	a.conn.PrintfLine("X-Apple-Session-ID: %s", a.sessionID)
+	a.conn.PrintfLine("CSeq: %d", a.cseq)
+
+	// Add auth headers, if necessary
+	if a.realm != "" {
+		username := ""
+		if a.realm == "raop" {
+			username = "iTunes"
+		} else if a.realm == "Airplay" {
+			username = "Airplay"
+		}
+
+		hash := md5.New()
+		io.WriteString(hash, username+":"+a.realm+":"+a.Password)
+		ha1 := fmt.Sprintf("%x", hash.Sum(nil))
+		hash.Reset()
+
+		io.WriteString(hash, method+":"+path)
+		ha2 := fmt.Sprintf("%x", hash.Sum(nil))
+		hash.Reset()
+
+		io.WriteString(hash, ha1+":"+a.nonce+":"+ha2)
+		response := fmt.Sprintf("%x", hash.Sum(nil))
+
+		a.conn.PrintfLine("Authorization: Digest username=\"%s\", realm=\"%s\", nonce=\"%s\", uri=\"%s\", response=\"%s\"", username, a.realm, a.nonce, path, response)
+	}
+
+	// Submit request
+	err = a.conn.PrintfLine("")
+	if err != nil {
+		return resp, err
+	}
+
+	// Read response
+	line, err := a.conn.ReadLine()
+	if err != nil {
+		return resp, err
+	}
+
+	fmt.Println(line)
+	f := strings.SplitN(line, " ", 3) // Proto, Code, Status
+	reasonPhrase := ""
+	if len(f) > 2 {
+		reasonPhrase = f[2]
+	}
+	resp.Status = f[1] + " " + reasonPhrase
+	resp.StatusCode, err = strconv.Atoi(f[1])
+	if err != nil {
+		return resp, err
+	}
+
+	resp.Proto = f[0]
+
+	headers, err := a.conn.ReadMIMEHeader()
+	if err != nil {
+		return resp, err
+	}
+
+	resp.Header = http.Header(headers)
+
+	//fmt.Println(headers)
+
+	// Do auth
+	if f[1] == "401" {
+		if a.Password == "" {
+			return resp, ErrPasswordRequired
+		} else if a.realm == "" {
+			// Parse the headers
+			auth := headers.Get("WWW-Authenticate")
+			if auth == "" {
+				return resp, ErrAuthUnsupported
+			}
+
+			authParts := strings.Split(auth, " ")
+			if authParts[0] != "Digest" {
+				return resp, ErrAuthUnsupported
+			}
+
+			for i := range authParts {
+				if i == 0 {
+					continue
+				}
+
+				parts := strings.SplitN(authParts[i], "=", 2)
+				value := strings.Trim(parts[1], "\"")
+				if parts[0] == "nonce" {
+					a.nonce = value
+
+				} else if parts[0] == "realm" {
+					a.realm = value
+				}
+			}
+
+			// Make another request with the new auth information
+			return a.makeHTTPRequest(method, path)
 
 		} else {
 			// We've already tried auth and failed

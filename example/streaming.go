@@ -36,6 +36,9 @@ func main() {
 
 			// We connected, now announce something
 			fmt.Println("Connected")
+
+			device.GetServerInfo()
+
 			break
 		}
 	}
