@@ -6,7 +6,7 @@ package airplay
 
 import (
 	"encoding/hex"
-	"fmt"
+	//"fmt"
 	"testing"
 )
 
@@ -116,7 +116,7 @@ func TestANY1(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Println(msg.String())
+	//fmt.Println(msg.String())
 }
 
 func TestTXT1(t *testing.T) {
@@ -133,5 +133,5 @@ func TestTXT1(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fmt.Println(msg.String())
+	//fmt.Println(msg.String())
 }

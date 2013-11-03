@@ -13,7 +13,7 @@ import (
 	"fmt"
 	"html"
 	"io/ioutil"
-	"net"
+	//"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -51,45 +51,47 @@ func StartRemoteServer() (rs RemoteServer, err error) {
 		}
 	}()
 
-	// Advertise ourselves on the network
-	var msg DNSMessage
+	/*
+		// Advertise ourselves on the network
+		var msg DNSMessage
 
-	rr := ResourceRecord{
-		Name:  "_touch-able._tcp.local.",
-		Type:  12, // PTR
-		Class: 1,
-	}
-	msg.AddAnswer(rr)
+		rr := ResourceRecord{
+			Name:  "_touch-able._tcp.local.",
+			Type:  12, // PTR
+			Class: 1,
+		}
+		msg.AddAnswer(rr)
 
-	buffer, err := msg.Pack()
-	if err != nil {
-		panic(err)
-	}
+		buffer, err := msg.Pack()
+		if err != nil {
+			panic(err)
+		}
 
-	// Write the payload
-	socket, err := net.DialUDP("udp", nil, &net.UDPAddr{
-		IP:   net.IPv4(224, 0, 0, 251),
-		Port: 5353,
-	})
-	if err != nil {
-		panic(err)
-	}
-	// Don't forget to close it!
-	defer socket.Close()
+		// Write the payload
+		socket, err := net.DialUDP("udp", nil, &net.UDPAddr{
+			IP:   net.IPv4(224, 0, 0, 251),
+			Port: 5353,
+		})
+		if err != nil {
+			panic(err)
+		}
+		// Don't forget to close it!
+		defer socket.Close()
 
-	_, err = socket.WriteToUDP(buffer, &net.UDPAddr{
-		IP:   net.IPv4(224, 0, 0, 251),
-		Port: 5353,
-	})
-	if err != nil {
-		panic(err)
-	}
+		_, err = socket.WriteToUDP(buffer, &net.UDPAddr{
+			IP:   net.IPv4(224, 0, 0, 251),
+			Port: 5353,
+		})
+		if err != nil {
+			panic(err)
+		}
+	*/
 
 	return
 }
 
 func Pair(device AirplayDevice, pin string) (r Remote, err error) {
-	// TODO: Validate pin
+	// TODO: Validate pin?
 	r.pin = pin
 
 	// md5(pairingcode1-2-3-4-)
@@ -116,6 +118,7 @@ func Pair(device AirplayDevice, pin string) (r Remote, err error) {
 		Path:     "/pair",
 		RawQuery: fmt.Sprintf("pairingcode=%s&servicename=%s", fmt.Sprintf("%X", hash.Sum(nil)), device.Name),
 	}
+	// Viewer-Only-Client: 1
 	resp, err := http.Get(u.String())
 	if err != nil {
 		return r, err
@@ -131,7 +134,7 @@ func Pair(device AirplayDevice, pin string) (r Remote, err error) {
 	}
 
 	fmt.Println("Body:")
-	fmt.Println(string(body))
+	fmt.Printf("% x\n", body)
 
 	return r, nil
 }
