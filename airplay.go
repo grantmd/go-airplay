@@ -1,3 +1,9 @@
+//
+// Useful links:
+// http://nto.github.io/AirPlay.html
+// https://xmms2.org/wiki/Technical_note_that_describes_the_Remote_Audio_Access_Protocol_(RAOP)_used_in_AirTunes
+//
+
 package airplay
 
 import (
@@ -60,7 +66,10 @@ func Dial(ip net.IP, port uint16, password string) (a Airplay, err error) {
 		return a, ErrInvalidOptions
 	}
 
+	// Good, now ANNOUNCE our capabilities
+
 	/*
+		// Reverse connection stuff, maybe unnecessary
 		a.reverseConn, err = textproto.Dial("tcp", ip.String()+":"+strconv.Itoa(int(port)))
 		if err != nil {
 			return a, err
@@ -93,6 +102,22 @@ func (a *Airplay) GetServerInfo() (err error) {
 	return nil
 }
 
+func (a *Airplay) Announce() (err error) {
+	u := url.URL{
+		Scheme: "rtsp",
+		Host:   ip.String() + ":" + strconv.Itoa(int(port)),
+		Path:   "/test",
+	}
+
+	resp, err := a.makeRTSPRequest("ANNOUNCE", u.String())
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(resp.Body)
+	return nil
+}
+
 func (a *Airplay) makeRTSPRequest(method string, path string) (resp http.Response, err error) {
 	a.cseq++
 	err = a.conn.PrintfLine("%s %s RTSP/1.0", method, path)
@@ -104,6 +129,14 @@ func (a *Airplay) makeRTSPRequest(method string, path string) (resp http.Respons
 	a.conn.PrintfLine("User-Agent: go-airplay/1.0")
 	a.conn.PrintfLine("X-Apple-Session-ID: %s", a.sessionID)
 	a.conn.PrintfLine("CSeq: %d", a.cseq)
+
+	/*
+		Content-Type: application/sdp
+		Content-Length: 348
+		Client-Instance: 56B29BB6CB904862
+		DACP-ID: 56B29BB6CB904862
+		Active-Remote: 1986535575
+	*/
 
 	// Add auth headers, if necessary
 	if a.realm != "" {

@@ -34,7 +34,7 @@ func main() {
 				panic(err)
 			}
 
-			// We connected, now announce something
+			// We connected, now stream something
 			fmt.Println("Connected")
 
 			device.GetServerInfo()

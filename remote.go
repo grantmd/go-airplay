@@ -1,5 +1,8 @@
 //
-// https://code.google.com/p/ytrack/wiki/DAAPDocumentation
+// http://blog.mycroes.nl/2008/08/pairing-itunes-remote-app-with-your-own.html
+// http://jinxidoru.blogspot.com/2009/06/itunes-remote-pairing-code.html
+// https://code.google.com/p/ytrack/wiki/DAAPDocumentation -- and other documentation
+// http://www.awilco.net/doku/dacp -- this one has the pairing process explained well
 //
 
 package airplay
