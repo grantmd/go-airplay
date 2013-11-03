@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/grantmd/go-airplay"
+	"os"
 )
 
 var (
@@ -11,11 +13,12 @@ var (
 
 func main() {
 	// Discover some devices
-	fmt.Println("Looking for devices...")
+	fmt.Println("Waiting for remotes...")
 
 	deviceChan := make(chan []airplay.AirplayDevice)
 	go airplay.Discover(deviceChan)
 
+	//var device airplay.Remote
 	for {
 		deviceList = <-deviceChan
 
@@ -26,6 +29,19 @@ func main() {
 			}
 
 			fmt.Println(deviceList[i].String())
+
+			fmt.Print("Enter the pin: ")
+			bio := bufio.NewReader(os.Stdin)
+			line, _, err := bio.ReadLine()
+			if err != nil {
+				panic(err)
+			}
+			//fmt.Println()
+
+			_, err = airplay.Pair(deviceList[i].IP, deviceList[i].Port, string(line))
+			if err != nil {
+				panic(err)
+			}
 
 			// We connected
 			fmt.Println("Connected")
