@@ -2,11 +2,14 @@
 // Useful links:
 // http://nto.github.io/AirPlay.html
 // https://xmms2.org/wiki/Technical_note_that_describes_the_Remote_Audio_Access_Protocol_(RAOP)_used_in_AirTunes
+// http://www.ietf.org/rfc/rfc2326.txt - RTSP
+// http://www.ietf.org/rfc/rfc4566.txt - SDP
 //
 
 package airplay
 
 import (
+	"bytes"
 	"crypto/md5"
 	"errors"
 	"fmt"
@@ -57,7 +60,7 @@ func Dial(ip net.IP, port uint16, password string) (a Airplay, err error) {
 		return a, err
 	}
 
-	resp, err := a.makeRTSPRequest("OPTIONS", "*")
+	resp, err := a.makeRTSPRequest("OPTIONS", "*", nil)
 	if err != nil {
 		return a, err
 	}
@@ -114,7 +117,7 @@ func (a *Airplay) Announce() (err error) {
 		Path:   "/test",
 	}
 
-	resp, err := a.makeRTSPRequest("ANNOUNCE", u.String())
+	resp, err := a.makeRTSPRequest("ANNOUNCE", u.String(), nil)
 	if err != nil {
 		return err
 	}
@@ -123,21 +126,35 @@ func (a *Airplay) Announce() (err error) {
 	return nil
 }
 
-func (a *Airplay) makeRTSPRequest(method string, path string) (resp http.Response, err error) {
+func (a *Airplay) makeRTSPRequest(method string, path string, body io.Reader) (resp http.Response, err error) {
 	a.cseq++
 	err = a.conn.PrintfLine("%s %s RTSP/1.0", method, path)
 	if err != nil {
 		return resp, err
 	}
 
-	a.conn.PrintfLine("Content-Length: 0")
+	var contentLength int64
+	if body != nil {
+		switch v := body.(type) {
+		case *bytes.Buffer:
+			contentLength = int64(v.Len())
+		case *bytes.Reader:
+			contentLength = int64(v.Len())
+		case *strings.Reader:
+			contentLength = int64(v.Len())
+		}
+
+		a.conn.PrintfLine("Content-Type: application/sdp")
+	} else {
+		contentLength = 0
+	}
+
+	a.conn.PrintfLine("Content-Length: %d", contentLength)
 	a.conn.PrintfLine("User-Agent: go-airplay/1.0")
 	a.conn.PrintfLine("X-Apple-Session-ID: %s", a.sessionID)
 	a.conn.PrintfLine("CSeq: %d", a.cseq)
 
 	/*
-		Content-Type: application/sdp
-		Content-Length: 348
 		Client-Instance: 56B29BB6CB904862
 		DACP-ID: 56B29BB6CB904862
 		Active-Remote: 1986535575
@@ -171,6 +188,13 @@ func (a *Airplay) makeRTSPRequest(method string, path string) (resp http.Respons
 	err = a.conn.PrintfLine("")
 	if err != nil {
 		return resp, err
+	}
+
+	if body != nil {
+		_, err = io.Copy(a.conn.W, io.LimitReader(body, contentLength))
+		if err != nil {
+			return resp, err
+		}
 	}
 
 	// Read response
@@ -234,7 +258,7 @@ func (a *Airplay) makeRTSPRequest(method string, path string) (resp http.Respons
 			}
 
 			// Make another request with the new auth information
-			return a.makeRTSPRequest(method, path)
+			return a.makeRTSPRequest(method, path, body)
 
 		} else {
 			// We've already tried auth and failed

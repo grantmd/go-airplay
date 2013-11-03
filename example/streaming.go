@@ -37,7 +37,7 @@ func main() {
 			// We connected, now stream something
 			fmt.Println("Connected")
 
-			device.GetServerInfo()
+			//device.GetServerInfo()
 
 			break
 		}
