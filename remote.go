@@ -11,7 +11,9 @@ import (
 	"crypto/md5"
 	"errors"
 	"fmt"
+	"html"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -23,6 +25,67 @@ var (
 
 type Remote struct {
 	pin string
+}
+
+type RemoteServer struct {
+	Port    int
+	Remotes []Remote
+}
+
+func StartRemoteServer() (rs RemoteServer, err error) {
+	rs = RemoteServer{
+		Port: 3690,
+	}
+
+	// Start our http server
+	serveMux := http.NewServeMux()
+	serveMux.HandleFunc("/server-info", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "Hello, %q", html.EscapeString(r.URL.Path))
+	})
+
+	// Listen async
+	go func() {
+		err = http.ListenAndServe(":"+strconv.Itoa(rs.Port), serveMux)
+		if err != nil {
+			return
+		}
+	}()
+
+	// Advertise ourselves on the network
+	var msg DNSMessage
+
+	rr := ResourceRecord{
+		Name:  "_touch-able._tcp.local.",
+		Type:  12, // PTR
+		Class: 1,
+	}
+	msg.AddAnswer(rr)
+
+	buffer, err := msg.Pack()
+	if err != nil {
+		panic(err)
+	}
+
+	// Write the payload
+	socket, err := net.DialUDP("udp", nil, &net.UDPAddr{
+		IP:   net.IPv4(224, 0, 0, 251),
+		Port: 5353,
+	})
+	if err != nil {
+		panic(err)
+	}
+	// Don't forget to close it!
+	defer socket.Close()
+
+	_, err = socket.WriteToUDP(buffer, &net.UDPAddr{
+		IP:   net.IPv4(224, 0, 0, 251),
+		Port: 5353,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	return
 }
 
 func Pair(device AirplayDevice, pin string) (r Remote, err error) {

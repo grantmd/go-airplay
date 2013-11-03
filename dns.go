@@ -288,6 +288,10 @@ func (msg *DNSMessage) AddQuestion(q Question) {
 	msg.Questions = append(msg.Questions, q)
 }
 
+func (msg *DNSMessage) AddAnswer(rr ResourceRecord) {
+	msg.Answers = append(msg.Answers, rr)
+}
+
 func (msg *DNSMessage) Pack() (buffer []byte, e error) {
 	buffer = make([]byte, 4096)
 	offset := 0

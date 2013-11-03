@@ -12,6 +12,12 @@ var (
 )
 
 func main() {
+	// Start the server
+	_, err := airplay.StartRemoteServer()
+	if err != nil {
+		panic(err)
+	}
+
 	// Discover some devices
 	fmt.Println("Waiting for remotes...")
 
