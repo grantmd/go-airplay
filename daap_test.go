@@ -15,5 +15,18 @@ func TestDAAPParse(t *testing.T) {
 	////////
 	tags := DAAPParse(bytes)
 
+	if len(tags) != 1 {
+		t.Errorf("Expected root tag length 1, got %d", len(tags))
+	}
+
+	cmpa, ok := tags["cmpa"].(map[string]interface{})
+	if ok == false {
+		t.Error("cmpa tag not found")
+	}
+
+	if len(cmpa) != 3 {
+		t.Errorf("Expected 'cmpa' tag length 3, got %d", len(cmpa))
+	}
+
 	fmt.Println(DAAPPrint(tags, ""))
 }
