@@ -20,11 +20,15 @@ import (
 )
 
 var (
-	ErrBadPin = errors.New("Invalid pin")
+	ErrBadPin      = errors.New("Invalid pin")
+	ErrInvalidDAAP = errors.New("Invalid DAAP response received")
 )
 
 type Remote struct {
-	pin string
+	pin  string
+	Name string
+	Type string
+	GUID string
 }
 
 type RemoteServer struct {
@@ -133,8 +137,15 @@ func Pair(device AirplayDevice, pin string) (r Remote, err error) {
 		return r, ErrBadPin
 	}
 
-	fmt.Println("Body:")
-	fmt.Printf("% x\n", body)
+	tags := DAAPParse(body)
+	cmpa, ok := tags["cmpa"].(map[string]interface{})
+	if ok == false {
+		return r, ErrInvalidDAAP
+	}
+
+	r.Name = cmpa["cmnm"].(string)
+	r.Type = cmpa["cmty"].(string)
+	r.GUID = fmt.Sprintf("%X", cmpa["cmpg"])
 
 	return r, nil
 }
