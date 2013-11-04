@@ -122,8 +122,10 @@ func Pair(device AirplayDevice, pin string) (r Remote, err error) {
 		Path:     "/pair",
 		RawQuery: fmt.Sprintf("pairingcode=%s&servicename=%s", fmt.Sprintf("%X", hash.Sum(nil)), device.Name),
 	}
-	// Viewer-Only-Client: 1
-	resp, err := http.Get(u.String())
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", u.String(), nil)
+	req.Header.Add("Viewer-Only-Client", "1")
+	resp, err := client.Do(req)
 	if err != nil {
 		return r, err
 	}
