@@ -4,6 +4,13 @@
 // https://xmms2.org/wiki/Technical_note_that_describes_the_Remote_Audio_Access_Protocol_(RAOP)_used_in_AirTunes
 // http://www.ietf.org/rfc/rfc2326.txt - RTSP
 // http://www.ietf.org/rfc/rfc4566.txt - SDP
+
+
+//
+// Need to look into https://github.com/stephen/nodetunes
+//
+
+
 //
 
 package airplay
